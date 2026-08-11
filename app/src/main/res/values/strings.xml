@@ -1,4 +1,11 @@
 <resources>
     <string name="app_name">Automacao Cliques</string>
-    <string name="hello_world">Hello World</string>
+    <string name="accessibility_service_label">Automacao de Cliques</string>
+    <string name="accessibility_service_summary">Permite que o app execute toques automaticos na tela.</string>
+    <string name="accessibility_service_description">Habilite para que o app possa reproduzir sequencias de toques na tela em seu lugar. Nenhum dado e enviado para fora do aparelho.</string>
+    <string name="service_status_enabled">Servico de acessibilidade: ATIVO</string>
+    <string name="service_status_disabled">Servico de acessibilidade: INATIVO</string>
+    <string name="open_accessibility_settings">Abrir configuracoes de acessibilidade</string>
+    <string name="accessibility_settings_unavailable">Nao foi possivel abrir as configuracoes de acessibilidade.</string>
+    <string name="logcat_hint">Eventos recebidos sao registrados no Logcat com a tag ClickService.</string>
 </resources>

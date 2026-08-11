@@ -4,12 +4,12 @@
 
 | Ferramenta | Versao | Observacao |
 | --- | --- | --- |
-| JDK | 17 | Exigido pelo AGP 8.5.2; o Android Studio ja embute um JBR 17 |
+| JDK | 17 | Exigido pelo AGP 8.11; o Android Studio ja embute um JBR 17 |
 | Android Studio | Ladybug (2024.2) ou mais recente | Opcional se voce so usar a linha de comando |
-| Android SDK Platform | API 34 (`platforms;android-34`) | `compileSdk` / `targetSdk` do projeto |
-| Android SDK Build-Tools | 34.0.0 | |
+| Android SDK Platform | API 36 (`platforms;android-36`) | `compileSdk` / `targetSdk` do projeto |
+| Android SDK Build-Tools | 36.0.0 | |
 | Platform-Tools (`adb`) | mais recente | Necessario para instalar no celular |
-| Gradle | 8.7 | Ja vem via wrapper (`./gradlew`), nao precisa instalar |
+| Gradle | 8.13 | Ja vem via wrapper (`./gradlew`), nao precisa instalar |
 | Emulador (opcional) | `emulator` + `system-images;android-34;google_apis;x86_64` | Para testar sem o aparelho fisico |
 
 O `minSdk` e 24 porque `AccessibilityService.dispatchGesture()` (base dos MVPs 2+) exige API 24.
@@ -17,8 +17,8 @@ O `minSdk` e 24 porque `AccessibilityService.dispatchGesture()` (base dos MVPs 2
 ## Setup pelo Android Studio
 
 1. `File > Open` e selecione a raiz do repositorio; aguarde o Gradle sync.
-2. `Tools > SDK Manager > SDK Platforms`: marque **Android 14 (API 34)**.
-3. `SDK Tools`: marque **Android SDK Build-Tools 34**, **Platform-Tools** e, se for usar emulador, **Android Emulator**.
+2. `Tools > SDK Manager > SDK Platforms`: marque **Android 16 (API 36)**.
+3. `SDK Tools`: marque **Android SDK Build-Tools 36**, **Platform-Tools** e, se for usar emulador, **Android Emulator**.
 4. O Android Studio cria o `local.properties` com o `sdk.dir` automaticamente.
 
 ## Setup por linha de comando (Linux)
@@ -33,7 +33,7 @@ mv /tmp/cmdtools/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
 
 yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-  "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+  "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 echo "sdk.dir=$ANDROID_HOME" > local.properties
