@@ -12,17 +12,17 @@ automaticamente em outros apps, usando a API de acessibilidade do Android
 
 - Android Studio (Ladybug ou mais recente)
 - JDK 17
-- `minSdk` 24 (necessario para `dispatchGesture()`), `compileSdk`/`targetSdk` 34
+- `minSdk` 24 (necessario para `dispatchGesture()`), `compileSdk`/`targetSdk` 36
 
 Passo a passo de instalacao das ferramentas, comandos do Gradle e como instalar o
 APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Roteiro de MVPs
 
-- **MVP 0 (atual)**: esqueleto do projeto Android em Kotlin exibindo "Hello World",
+- **MVP 0**: esqueleto do projeto Android em Kotlin exibindo "Hello World",
   compilando e rodando em emulador ou dispositivo fisico.
-- **MVP 1**: `AccessibilityService` declarado e habilitavel nas configuracoes do
-  aparelho, com log de eventos.
+- **MVP 1 (atual)**: `AccessibilityService` declarado e habilitavel nas configuracoes
+  do aparelho, com log de eventos e indicador de status na tela inicial.
 - **MVP 2**: executar um unico clique programatico em coordenada fixa via
   `dispatchGesture()`.
 - **MVP 3**: executar uma sequencia de cliques com intervalos configuraveis.
@@ -31,7 +31,7 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 - **MVP 5**: overlay flutuante (start/stop sem sair do app alvo) e persistencia
   das sequencias.
 
-## Como rodar (validacao do MVP 0)
+## Como rodar
 
 1. Clone o repositorio e abra a pasta no Android Studio (`File > Open`), aguardando
    o Gradle sync.
@@ -42,4 +42,18 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
    dispositivo) ou `./gradlew assembleDebug` para gerar o APK em
    `app/build/outputs/apk/debug/`.
 
-A tela inicial deve exibir o texto "Hello World".
+A tela inicial mostra se o servico de acessibilidade esta ATIVO ou INATIVO e um
+botao que abre as configuracoes de acessibilidade do sistema.
+
+## Habilitando o servico de acessibilidade
+
+1. Abra o app e toque em **Abrir configuracoes de acessibilidade**.
+2. Em `Apps instalados` (ou `Servicos instalados`), selecione **Automacao de Cliques**
+   e ative o servico.
+3. Volte ao app: o status deve mudar para **ATIVO**.
+4. Os eventos recebidos aparecem no Logcat:
+   `adb logcat -s ClickService`.
+
+Em Android 13+ um app instalado fora da loja (sideload) pode ter o acesso a
+acessibilidade bloqueado. Nesse caso abra `Configuracoes > Apps > Automacao Cliques`,
+menu (tres pontos) e escolha **Permitir configuracoes restritas** antes do passo 2.
