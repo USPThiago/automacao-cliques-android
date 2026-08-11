@@ -14,6 +14,9 @@ automaticamente em outros apps, usando a API de acessibilidade do Android
 - JDK 17
 - `minSdk` 24 (necessario para `dispatchGesture()`), `compileSdk`/`targetSdk` 34
 
+Passo a passo de instalacao das ferramentas, comandos do Gradle e como instalar o
+APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
+
 ## Roteiro de MVPs
 
 - **MVP 0 (atual)**: esqueleto do projeto Android em Kotlin exibindo "Hello World",
