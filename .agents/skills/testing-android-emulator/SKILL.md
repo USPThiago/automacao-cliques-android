@@ -151,5 +151,40 @@ Enable it through the UI (preferred — proves the real user flow):
   acionam os botões do painel lateral do emulador. Fallback: `adb shell input keyevent KEYCODE_APP_SWITCH`
   (Recentes) e então tocar no card do app com o mouse.
 
+## Leitura de tela + sequências de cliques (MVP 3+)
+- Centro físico: a partir do MVP 3 o serviço usa `WindowManager.currentWindowMetrics` (fallback
+  `getRealMetrics()` < API 30), então no Pixel 5 AVD o clique automático loga **(540.0, 1170.0)**
+  (não mais 1069.0). Use esse valor como critério de aprovação.
+- `Ler tela agora` deve logar `Tela de <pacote>: N nos visiveis` + uma linha por nó
+  (classe, text, desc, id, bounds, centro, clicavel) e mostrar um toast. Filtre com
+  `adb logcat -d -s ClickService | grep -E "nos visiveis|id=.*:id/"`.
+- **Gotcha importante: digitação por teclado do host (`type`/xdotool) NÃO chega ao emulador.**
+  Use o teclado virtual do Android: `?123` (canto inferior esquerdo) para dígitos e volte para `ABC`
+  para a vírgula (o layout numérico só tem `;`). Alternativa não-UI: `adb shell input text`.
+- **Gotcha: o layout do app muda quando o IME esconde/aparece**, então o botão pode não estar
+  onde a screenshot anterior mostrava. Padrão confiável: tocar primeiro no campo de texto
+  (IME aberto) e só então tocar no botão, confirmando pelo toast na screenshot retornada.
+- **Gotcha: cliques do mouse no emulador podem não registrar enquanto um comando do host roda em
+  background** (exec backgrounded). Sempre confirme que a ação chegou (toast/log `Iniciando
+  sequencia com N passo(s)`) antes de contar tempo.
+- Trazer a tela-alvo para frente dentro da janela de 3 s é a parte difícil: chamadas de ferramenta
+  do host levam 2-4 s. Duas técnicas que funcionam:
+  1. Agendar a troca **dentro do device** (o exec retorna na hora, o sleep roda no Android):
+     ```bash
+     adb shell "nohup sh -c 'sleep 5; am start -a android.intent.action.SET_TIMER' >/dev/null 2>&1 &"
+     ```
+     e só então tocar em "Executar sequência" na UI.
+  2. Prefixar a sequência com termos-isca (ex.: `zz,zz,zz,7,8,9`): os passos de isca gastam tempo
+     (1 s cada) e ainda provam o caminho `nenhum no encontrado para termo~...`, e os dígitos caem
+     já com o alvo em primeiro plano.
+- Alvo determinístico para múltiplos cliques resolvidos por leitura de tela: **Relógio > Timer**.
+  Os botões têm ids `com.google.android.deskclock:id/timer_setup_digit_<n>`; a sequência `7,8,9`
+  deixa o display em `00h 07m 89s`. Zere com ⌫ ou reabra o Timer antes de cada rodada.
+- Cuidado com auto-match: enquanto o próprio app está em primeiro plano, qualquer termo contido no
+  texto do `EditText` de termos casa o próprio campo (`Clicando no no EditText text="7,8,9" ...`).
+  Isso não é bug, mas invalida a evidência — confirme no log o `pacote`/`id` do nó clicado.
+- `KEYCODE_APP_SWITCH` duas vezes troca de app, mas via host pode levar >3 s; verifique com
+  `adb shell dumpsys activity activities | grep -m1 ResumedActivity`.
+
 ## Devin Secrets Needed
 None.
