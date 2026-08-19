@@ -21,10 +21,10 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 
 - **MVP 0**: esqueleto do projeto Android em Kotlin exibindo "Hello World",
   compilando e rodando em emulador ou dispositivo fisico.
-- **MVP 1 (atual)**: `AccessibilityService` declarado e habilitavel nas configuracoes
+- **MVP 1**: `AccessibilityService` declarado e habilitavel nas configuracoes
   do aparelho, com log de eventos e indicador de status na tela inicial.
-- **MVP 2**: executar um unico clique programatico em coordenada fixa via
-  `dispatchGesture()`.
+- **MVP 2 (atual)**: clique programatico unico no centro da tela via
+  `dispatchGesture()`, disparado ~3s depois de o servico ser ativado.
 - **MVP 3**: executar uma sequencia de cliques com intervalos configuraveis.
 - **MVP 4**: UI para cadastrar/editar/salvar sequencias (coordenadas + delays) e
   iniciar/parar a execucao.
@@ -53,6 +53,22 @@ botao que abre as configuracoes de acessibilidade do sistema.
 3. Volte ao app: o status deve mudar para **ATIVO**.
 4. Os eventos recebidos aparecem no Logcat:
    `adb logcat -s ClickService`.
+
+## Clique automatico (MVP 2)
+
+Ao ativar o servico, ele agenda um clique unico no centro da tela (calculado a
+partir de `Resources.getSystem().displayMetrics`) para ~3 segundos depois, tempo
+suficiente para sair das Configuracoes e abrir a tela alvo.
+
+Para acompanhar:
+
+```
+adb logcat -s ClickService
+```
+
+Os logs mostram `Despachando clique em x=... y=...` e, em seguida,
+`Gesto concluido` (ou `Gesto cancelado`). Para confirmar visualmente, ative
+`Opcoes do desenvolvedor > Mostrar toques`.
 
 Em Android 13+ um app instalado fora da loja (sideload) pode ter o acesso a
 acessibilidade bloqueado. Nesse caso abra `Configuracoes > Apps > Automacao Cliques`,
