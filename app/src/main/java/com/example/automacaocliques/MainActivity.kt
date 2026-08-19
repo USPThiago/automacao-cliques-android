@@ -19,6 +19,46 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.openSettingsButton.setOnClickListener { openAccessibilitySettings() }
+        binding.readScreenButton.setOnClickListener { readScreen() }
+        binding.runSequenceButton.setOnClickListener { runSequence() }
+    }
+
+    /** Pede ao servico um dump da janela ativa no Logcat. */
+    private fun readScreen() {
+        val service = ClickAccessibilityService.instance
+        if (service == null) {
+            toast(R.string.service_inactive_warning)
+            return
+        }
+        service.logScreen()
+        toast(R.string.screen_logged)
+    }
+
+    /**
+     * Agenda uma sequencia de cliques a partir dos termos digitados. O primeiro
+     * clique acontece apos [START_DELAY_MS] para dar tempo de abrir a tela alvo.
+     */
+    private fun runSequence() {
+        val service = ClickAccessibilityService.instance
+        if (service == null) {
+            toast(R.string.service_inactive_warning)
+            return
+        }
+        val steps = ClickStep.fromTerms(
+            input = binding.sequenceInput.text?.toString().orEmpty(),
+            delayMs = STEP_DELAY_MS,
+            firstDelayMs = START_DELAY_MS
+        )
+        if (steps.isEmpty()) {
+            toast(R.string.sequence_empty)
+            return
+        }
+        service.runSequence(steps)
+        toast(R.string.sequence_scheduled)
+    }
+
+    private fun toast(messageRes: Int) {
+        Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
     }
 
     override fun onResume() {
@@ -46,5 +86,13 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.accessibility_settings_unavailable, Toast.LENGTH_LONG)
                 .show()
         }
+    }
+
+    private companion object {
+        /** Espera antes do primeiro clique, para o usuario abrir a tela alvo. */
+        const val START_DELAY_MS = 3_000L
+
+        /** Intervalo entre os cliques seguintes. */
+        const val STEP_DELAY_MS = 1_000L
     }
 }
