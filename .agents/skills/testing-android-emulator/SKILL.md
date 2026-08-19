@@ -114,5 +114,42 @@ Enable it through the UI (preferred — proves the real user flow):
   the device screen (e.g. drag from y≈725 to y≈400 for a 520x1150 window); starting higher just
   scrolls the current app instead.
 
+## Provando gestos despachados (`dispatchGesture`, MVP 2+)
+- Os logs esperados por ciclo de conexão são: `Servico conectado` → (delay) →
+  `Despachando clique em x=.. y=..` → `Gesto concluido em x=.. y=..`. Verifique também que
+  `Gesto cancelado` e `dispatchGesture retornou false` têm contagem 0:
+  ```bash
+  adb logcat -d -s ClickService | grep -E "Servico conectado|Despachando|Gesto|retornou"
+  adb logcat -d -s ClickService | grep -cE "Gesto cancelado|retornou false"   # esperado: 0
+  ```
+- `Resources.getSystem().displayMetrics` NÃO devolve o tamanho físico da tela: num Pixel 5 AVD
+  (1080x2340) devolve 1080x2138 (sem status/nav bar), então o "centro" cai em (540,1069),
+  ~101 px acima do centro físico (540,1170). Calcule o valor esperado assim antes de julgar o log.
+- Provar que o toque foi realmente entregue (não só "concluido"):
+  - `settings put system show_touches 1` dá só um flash de 50 ms — fraco como evidência.
+    `pointer_location 1` NÃO registra gestos injetados por acessibilidade (fica em 0.0).
+  - Melhor: use um alvo determinístico com efeito persistente. O teclado do
+    **Relógio > Timer** (`adb shell am start -a android.intent.action.SET_TIMER -e android.intent.extra.alarm.SKIP_UI false`)
+    tem o botão `5` em bounds `[416,927][664,1175]`, que contém (540,1069): o display muda de
+    `00h 00m 00s` para `00h 00m 05s`. Confirme também `Evento TYPE_VIEW_CLICKED pacote=com.google.android.deskclock`.
+  - Na própria tela de detalhe do serviço em Configurações, o clique central acerta o Switch
+    "Use ..." e abre o diálogo `Stop ...?` (com `TYPE_VIEW_CLICKED classe=android.widget.Switch`) —
+    também é evidência válida, mas cancele o diálogo para não desligar o serviço.
+- Rearmar o clique = reconectar o serviço (desligar/ligar o toggle na UI). Cuidado: rodar
+  `uiautomator dump` faz o sistema religar os serviços de acessibilidade (`Servico desconectado` +
+  `Servico conectado`), o que dispara um clique extra ~3 s depois; evite dumps durante a janela de
+  medição e prefira screenshots.
+- Para a gravação ficar legível, mostre o logcat ao vivo numa janela ao lado do emulador
+  (`sudo apt-get install -y xterm`; não há terminal instalado por padrão):
+  ```bash
+  DISPLAY=:0 xterm -fa Monospace -fs 10 -bg black -fg green -geometry 110x24+330+470 \
+    -e "bash -c 'adb logcat -s ClickService'" &
+  DISPLAY=:0 wmctrl -r "Android Emulator - mvp0:5554" -e 0,10,10,480,1060
+  DISPLAY=:0 xdotool windowminimize $(DISPLAY=:0 wmctrl -l | grep Chrome | cut -d" " -f1)
+  ```
+- Gestos de mouse (`left_click_drag`/mouse_down+move) muitas vezes NÃO abrem a gaveta de apps nem
+  acionam os botões do painel lateral do emulador. Fallback: `adb shell input keyevent KEYCODE_APP_SWITCH`
+  (Recentes) e então tocar no card do app com o mouse.
+
 ## Devin Secrets Needed
 None.
