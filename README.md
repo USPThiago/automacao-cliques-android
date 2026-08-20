@@ -24,10 +24,12 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 - **MVP 1**: `AccessibilityService` declarado e habilitavel nas configuracoes
   do aparelho, com log de eventos e indicador de status na tela inicial.
 - **MVP 2**: clique programatico unico no centro da tela via
-  `dispatchGesture()`, disparado ~3s depois de o servico ser ativado.
-- **MVP 3 (atual)**: leitura da tela via `AccessibilityNodeInfo` (texto, content
+  `dispatchGesture()`, disparado ~6s depois de o servico ser ativado.
+- **MVP 3**: leitura da tela via `AccessibilityNodeInfo` (texto, content
   description, view id, classe e coordenadas) e execucao de varios cliques por
   tela, resolvidos por termo no momento do clique.
+- **MVP 3.5 (atual)**: reconhecimento visual por captura de tela + template
+  matching, para telas sem arvore de acessibilidade (jogos).
 - **MVP 4**: UI para cadastrar/editar/salvar sequencias (coordenadas + delays) e
   iniciar/parar a execucao.
 - **MVP 5**: overlay flutuante (start/stop sem sair do app alvo) e persistencia
@@ -58,7 +60,7 @@ botao que abre as configuracoes de acessibilidade do sistema.
 
 ## Clique automatico (MVP 2)
 
-Ao ativar o servico, ele agenda um clique unico no centro da tela para ~3 segundos
+Ao ativar o servico, ele agenda um clique unico no centro da tela para ~6 segundos
 depois, tempo suficiente para sair das Configuracoes e abrir a tela alvo.
 
 Para acompanhar:
@@ -83,16 +85,16 @@ resultado dos anteriores.
 
 - **Ler tela agora**: registra no Logcat todos os nos visiveis com texto,
   content description, view id, classe, `bounds` e centro (`ClickService`).
-- **Executar sequencia (3s)**: digite termos separados por virgula (ex.:
+- **Executar sequencia (6s)**: digite termos separados por virgula (ex.:
   `5, 0, Iniciar`); cada termo casa com texto, content description ou view id do
-  elemento, sem diferenciar maiusculas. O primeiro clique acontece 3s depois
+  elemento, sem diferenciar maiusculas. O primeiro clique acontece 6s depois
   (tempo de abrir a tela alvo) e os seguintes a cada 1s. Termos nao encontrados
   geram `nenhum no encontrado para termo~...` no Logcat e a sequencia continua.
 
-Na API de acessibilidade nao ha acesso aos pixels da tela: elementos graficos sao
-identificados por `contentDescription`, `className`, `viewIdResourceName` e
-posicao. Reconhecimento visual de imagens exigiria captura de tela + visao
-computacional.
+A arvore de acessibilidade so mostra o que o app alvo publica nela. Jogos (Unity,
+Unreal, canvas) desenham tudo numa unica `SurfaceView` e nao publicam textos nem
+botoes, entao nenhuma busca por termo funciona nessas telas - use o
+reconhecimento visual do MVP 3.5.
 
 API programatica (`ClickAccessibilityService`):
 
@@ -107,6 +109,65 @@ service.runSequence(
     )
 )
 service.cancelSequence()
+```
+
+## Reconhecimento visual por template (MVP 3.5)
+
+Para telas sem arvore de acessibilidade, o servico captura a tela
+(`AccessibilityService.takeScreenshot()`, **Android 11 / API 30+**), converte para
+tons de cinza e procura recortes ("templates") por correlacao cruzada normalizada,
+clicando no centro da regiao encontrada. Em Android 10 ou anterior a captura nao
+esta disponivel e apenas o MVP 3 funciona.
+
+### Criando os templates
+
+1. Capture a tela do jogo (`adb exec-out screencap -p > tela.png` ou a captura do
+   proprio aparelho).
+2. Recorte apenas o elemento a ser clicado (o botao, o icone), sem fundo variavel
+   nem animacao; recortes de 40 a 200 px de lado funcionam bem.
+3. Salve como PNG com um nome curto e sem espacos, ex.: `loja.png`, `fechar_x.png`.
+
+### Instalando os templates no aparelho
+
+Os arquivos ficam em `Android/data/com.example.automacaocliques/files/templates/`
+(o caminho exato aparece na tela inicial do app):
+
+```
+adb push loja.png /sdcard/Android/data/com.example.automacaocliques/files/templates/
+```
+
+Extensoes aceitas: `png`, `jpg`, `jpeg`, `webp`. O nome do template e o nome do
+arquivo sem extensao, em minusculas.
+
+### Usando
+
+- **Reconhecer tela (templates)**: compara a captura atual com todos os templates
+  instalados e registra no Logcat os escores em ordem decrescente, identificando a
+  variante de tela mais provavel:
+
+  ```
+  Reconhecendo tela 1080x2340 com 3 template(s)
+    loja -> score=0.941 escala=1.00 centro=(864.0, 1520.0) regiao=[...]
+    batalha -> score=0.402 ...
+  Tela reconhecida como 'loja'
+  ```
+
+- Numa sequencia, prefixe o termo com `@` para clicar por imagem em vez de por
+  texto: `@loja, @fechar_x, Iniciar` mistura cliques visuais e por nos.
+- O escore vai de -1 a 1 (1 = identico) e o limite padrao para aceitar um
+  casamento e **0.80**; abaixo dele o clique nao e despachado e o Logcat registra
+  `abaixo do limite`. Escores baixos costumam indicar recorte com fundo animado,
+  resolucao muito diferente ou tela errada.
+- O template e testado em varias escalas (0.66x a 1.5x), o que tolera aparelhos
+  com resolucao diferente daquela usada no recorte.
+
+API programatica:
+
+```kotlin
+service.identifyScreen { name -> /* melhor template acima do limite */ }
+service.findTemplate("loja") { match -> /* TemplateMatch com centro e escore */ }
+service.clickTemplate("loja", threshold = 0.85)
+service.runSequence(listOf(ClickStep.OnTemplate("loja", delayMs = 6_000)))
 ```
 
 Em Android 13+ um app instalado fora da loja (sideload) pode ter o acesso a

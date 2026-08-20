@@ -8,11 +8,14 @@
     <string name="open_accessibility_settings">Abrir configuracoes de acessibilidade</string>
     <string name="accessibility_settings_unavailable">Nao foi possivel abrir as configuracoes de acessibilidade.</string>
     <string name="read_screen">Ler tela agora</string>
-    <string name="run_sequence">Executar sequencia (3s)</string>
-    <string name="sequence_hint">Termos separados por virgula (ex.: 5, 0, Iniciar)</string>
+    <string name="run_sequence">Executar sequencia (6s)</string>
+    <string name="identify_screen">Reconhecer tela (templates)</string>
+    <string name="sequence_hint">Termos separados por virgula (ex.: 5, Iniciar, @loja)</string>
+    <string name="templates_dir">Templates em: %1$s</string>
+    <string name="identifying_screen">Reconhecendo a tela: veja o Logcat.</string>
     <string name="service_inactive_warning">Ative o servico de acessibilidade primeiro.</string>
     <string name="sequence_empty">Informe ao menos um termo.</string>
-    <string name="sequence_scheduled">Sequencia agendada: abra a tela alvo agora.</string>
+    <string name="sequence_scheduled">Sequencia agendada: abra a tela alvo agora (6s).</string>
     <string name="screen_logged">Tela lida: veja o Logcat (tag ClickService).</string>
     <string name="logcat_hint">Eventos recebidos sao registrados no Logcat com a tag ClickService.</string>
 </resources>

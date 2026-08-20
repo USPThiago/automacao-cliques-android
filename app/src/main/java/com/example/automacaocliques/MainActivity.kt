@@ -21,6 +21,22 @@ class MainActivity : AppCompatActivity() {
         binding.openSettingsButton.setOnClickListener { openAccessibilitySettings() }
         binding.readScreenButton.setOnClickListener { readScreen() }
         binding.runSequenceButton.setOnClickListener { runSequence() }
+        binding.identifyScreenButton.setOnClickListener { identifyScreen() }
+
+        binding.templatesPath.text =
+            getString(R.string.templates_dir, TemplateStore(this).directory().absolutePath)
+    }
+
+    /** Compara a tela atual com os templates instalados e loga os escores. */
+    private fun identifyScreen() {
+        val service = ClickAccessibilityService.instance
+        if (service == null) {
+            toast(R.string.service_inactive_warning)
+            return
+        }
+        service.templates.invalidate()
+        service.identifyScreen()
+        toast(R.string.identifying_screen)
     }
 
     /** Pede ao servico um dump da janela ativa no Logcat. */
@@ -90,7 +106,7 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         /** Espera antes do primeiro clique, para o usuario abrir a tela alvo. */
-        const val START_DELAY_MS = 3_000L
+        const val START_DELAY_MS = 6_000L
 
         /** Intervalo entre os cliques seguintes. */
         const val STEP_DELAY_MS = 1_000L

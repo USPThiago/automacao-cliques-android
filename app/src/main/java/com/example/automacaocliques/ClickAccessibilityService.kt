@@ -2,6 +2,7 @@ package com.example.automacaocliques
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
@@ -9,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
+import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 
@@ -20,6 +22,9 @@ import android.view.accessibility.AccessibilityEvent
 class ClickAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Recortes usados no reconhecimento visual das telas. */
+    val templates: TemplateStore by lazy { TemplateStore(this) }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -86,6 +91,123 @@ class ClickAccessibilityService : AccessibilityService() {
         scheduleStep(steps, 0)
     }
 
+    /**
+     * Captura a tela via [takeScreenshot] e entrega o bitmap (ou `null` em caso
+     * de falha) na thread principal. Requer Android 11 (API 30); em versoes
+     * anteriores nao ha captura de tela pela API de acessibilidade.
+     */
+    fun captureScreen(onResult: (Bitmap?) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Log.w(TAG, "Captura de tela exige Android 11 (API 30); atual=${Build.VERSION.SDK_INT}")
+            onResult(null)
+            return
+        }
+        takeScreenshot(
+            Display.DEFAULT_DISPLAY,
+            mainExecutor,
+            object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    val bitmap = screenshot.hardwareBuffer.use { buffer ->
+                        Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                            ?.copy(Bitmap.Config.ARGB_8888, false)
+                    }
+                    if (bitmap == null) Log.w(TAG, "Nao foi possivel converter a captura de tela")
+                    onResult(bitmap)
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    Log.w(TAG, "Falha na captura de tela (codigo=$errorCode)")
+                    onResult(null)
+                }
+            }
+        )
+    }
+
+    /**
+     * Procura o template [name] na tela atual e entrega a melhor ocorrencia com
+     * escore acima de [threshold], ou `null`.
+     */
+    fun findTemplate(
+        name: String,
+        threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
+        onResult: (TemplateMatch?) -> Unit
+    ) {
+        val template = templates.get(name)
+        if (template == null) {
+            onResult(null)
+            return
+        }
+        captureScreen { bitmap ->
+            if (bitmap == null) {
+                onResult(null)
+                return@captureScreen
+            }
+            val match = TemplateMatcher.findBest(bitmap.toGrayImage(), template.image)
+            when {
+                match == null -> Log.w(TAG, "Template '$name' nao cabe na tela")
+                match.score < threshold ->
+                    Log.w(TAG, "Template '$name' abaixo do limite: ${match.describe()}")
+                else -> Log.i(TAG, "Template '$name' encontrado: ${match.describe()}")
+            }
+            onResult(match?.takeIf { it.score >= threshold })
+        }
+    }
+
+    /** Clica no centro da ocorrencia do template [name], se encontrada. */
+    fun clickTemplate(
+        name: String,
+        threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
+        onDone: () -> Unit = {}
+    ) {
+        findTemplate(name, threshold) { match ->
+            if (match == null) {
+                Log.w(TAG, "Template '$name' nao encontrado; nenhum clique despachado")
+            } else {
+                click(match.centerX, match.centerY)
+            }
+            onDone()
+        }
+    }
+
+    /**
+     * Compara todos os templates disponiveis com a tela atual e registra os
+     * escores em ordem decrescente, identificando a variante de tela mais
+     * provavel. Entrega o nome do melhor template acima de [threshold].
+     */
+    fun identifyScreen(
+        threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
+        onResult: (String?) -> Unit = {}
+    ) {
+        val available = templates.all()
+        if (available.isEmpty()) {
+            Log.w(TAG, "Nenhum template em ${templates.directory()}")
+            onResult(null)
+            return
+        }
+        captureScreen { bitmap ->
+            if (bitmap == null) {
+                onResult(null)
+                return@captureScreen
+            }
+            val screen = bitmap.toGrayImage()
+            Log.i(TAG, "Reconhecendo tela ${screen.width}x${screen.height} com ${available.size} template(s)")
+            val scored = available
+                .mapNotNull { template ->
+                    TemplateMatcher.findBest(screen, template.image)?.let { template.name to it }
+                }
+                .sortedByDescending { it.second.score }
+            scored.forEach { (name, match) -> Log.i(TAG, "  $name -> ${match.describe()}") }
+
+            val best = scored.firstOrNull()?.takeIf { it.second.score >= threshold }
+            if (best == null) {
+                Log.w(TAG, "Nenhum template acima do limite $threshold")
+            } else {
+                Log.i(TAG, "Tela reconhecida como '${best.first}'")
+            }
+            onResult(best?.first)
+        }
+    }
+
     /** Cancela uma sequencia agendada e cliques pendentes. */
     fun cancelSequence() {
         mainHandler.removeCallbacksAndMessages(null)
@@ -99,17 +221,18 @@ class ClickAccessibilityService : AccessibilityService() {
         }
         val step = steps[index]
         mainHandler.postDelayed({
-            executeStep(step, index, steps.size)
-            scheduleStep(steps, index + 1)
+            executeStep(step, index, steps.size) { scheduleStep(steps, index + 1) }
         }, step.delayMs)
     }
 
-    private fun executeStep(step: ClickStep, index: Int, total: Int) {
+    /** Executa um passo e chama [onDone] quando ele termina. */
+    private fun executeStep(step: ClickStep, index: Int, total: Int, onDone: () -> Unit) {
         val label = "passo ${index + 1}/$total"
         when (step) {
             is ClickStep.AtPoint -> {
                 Log.i(TAG, "$label: clique em (${step.x}, ${step.y})")
                 click(step.x, step.y)
+                onDone()
             }
             is ClickStep.OnNode -> {
                 val node = findNode(step.selector)
@@ -119,6 +242,11 @@ class ClickAccessibilityService : AccessibilityService() {
                     Log.i(TAG, "$label: ${step.selector.describe()}")
                     clickNode(node)
                 }
+                onDone()
+            }
+            is ClickStep.OnTemplate -> {
+                Log.i(TAG, "$label: template '${step.name}' (limite ${step.threshold})")
+                clickTemplate(step.name, step.threshold, onDone)
             }
         }
     }
@@ -174,7 +302,7 @@ class ClickAccessibilityService : AccessibilityService() {
         const val TAG = "ClickService"
 
         /** Atraso antes do clique automatico, para o usuario sair das Configuracoes. */
-        private const val INITIAL_CLICK_DELAY_MS = 3_000L
+        private const val INITIAL_CLICK_DELAY_MS = 6_000L
 
         /** Duracao do toque despachado. */
         private const val CLICK_DURATION_MS = 50L
