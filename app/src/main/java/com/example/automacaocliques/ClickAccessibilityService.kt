@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import java.util.concurrent.Executors
 
 /**
  * Servico de acessibilidade responsavel por ler a tela e despachar gestos de
@@ -22,6 +23,13 @@ import android.view.accessibility.AccessibilityEvent
 class ClickAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Thread unica para captura e casamento de templates: a correlacao custa
+     * alguns segundos por template e travaria a interface (ANR) se rodasse na
+     * thread principal.
+     */
+    private val visionExecutor = Executors.newSingleThreadExecutor()
 
     /** Recortes usados no reconhecimento visual das telas. */
     val templates: TemplateStore by lazy { TemplateStore(this) }
@@ -93,8 +101,9 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /**
      * Captura a tela via [takeScreenshot] e entrega o bitmap (ou `null` em caso
-     * de falha) na thread principal. Requer Android 11 (API 30); em versoes
-     * anteriores nao ha captura de tela pela API de acessibilidade.
+     * de falha) em [visionExecutor], nunca na thread principal. Requer Android 11
+     * (API 30); em versoes anteriores nao ha captura de tela pela API de
+     * acessibilidade.
      */
     fun captureScreen(onResult: (Bitmap?) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -104,7 +113,7 @@ class ClickAccessibilityService : AccessibilityService() {
         }
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
-            mainExecutor,
+            visionExecutor,
             object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     val bitmap = screenshot.hardwareBuffer.use { buffer ->
@@ -125,7 +134,8 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /**
      * Procura o template [name] na tela atual e entrega a melhor ocorrencia com
-     * escore acima de [threshold], ou `null`.
+     * escore acima de [threshold], ou `null`. O resultado chega na thread
+     * principal.
      */
     fun findTemplate(
         name: String,
@@ -137,9 +147,14 @@ class ClickAccessibilityService : AccessibilityService() {
             onResult(null)
             return
         }
+        if (isOwnAppInForeground()) {
+            Log.w(TAG, "Template '$name' ignorado: o proprio app esta em primeiro plano")
+            onResult(null)
+            return
+        }
         captureScreen { bitmap ->
             if (bitmap == null) {
-                onResult(null)
+                mainHandler.post { onResult(null) }
                 return@captureScreen
             }
             val match = TemplateMatcher.findBest(bitmap.toGrayImage(), template.image)
@@ -149,9 +164,17 @@ class ClickAccessibilityService : AccessibilityService() {
                     Log.w(TAG, "Template '$name' abaixo do limite: ${match.describe()}")
                 else -> Log.i(TAG, "Template '$name' encontrado: ${match.describe()}")
             }
-            onResult(match?.takeIf { it.score >= threshold })
+            val accepted = match?.takeIf { it.score >= threshold }
+            mainHandler.post { onResult(accepted) }
         }
     }
+
+    /**
+     * Indica se a janela ativa pertence a este app. Um passo visual executado
+     * nesse estado casaria a propria interface de automacao em vez da tela alvo.
+     */
+    private fun isOwnAppInForeground(): Boolean =
+        rootInActiveWindow?.packageName == packageName
 
     /** Clica no centro da ocorrencia do template [name], se encontrada. */
     fun clickTemplate(
@@ -178,17 +201,17 @@ class ClickAccessibilityService : AccessibilityService() {
         threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
         onResult: (String?) -> Unit = {}
     ) {
-        val available = templates.all()
-        if (available.isEmpty()) {
+        if (templates.names().isEmpty()) {
             Log.w(TAG, "Nenhum template em ${templates.directory()}")
             onResult(null)
             return
         }
         captureScreen { bitmap ->
             if (bitmap == null) {
-                onResult(null)
+                mainHandler.post { onResult(null) }
                 return@captureScreen
             }
+            val available = templates.all()
             val screen = bitmap.toGrayImage()
             Log.i(TAG, "Reconhecendo tela ${screen.width}x${screen.height} com ${available.size} template(s)")
             val scored = available
@@ -204,7 +227,8 @@ class ClickAccessibilityService : AccessibilityService() {
             } else {
                 Log.i(TAG, "Tela reconhecida como '${best.first}'")
             }
-            onResult(best?.first)
+            val name = best?.first
+            mainHandler.post { onResult(name) }
         }
     }
 
@@ -292,6 +316,7 @@ class ClickAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
         mainHandler.removeCallbacksAndMessages(null)
+        visionExecutor.shutdownNow()
         isRunning = false
         instance = null
         Log.i(TAG, "Servico desconectado")

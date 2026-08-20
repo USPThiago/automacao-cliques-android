@@ -161,6 +161,20 @@ arquivo sem extensao, em minusculas.
 - O template e testado em varias escalas (0.66x a 1.5x), o que tolera aparelhos
   com resolucao diferente daquela usada no recorte.
 
+### Limitacoes conhecidas
+
+- Cada template custa alguns segundos numa tela 1080x2340. A captura e a
+  correlacao rodam numa thread de background (na thread principal causavam ANR),
+  mas uma sequencia com muitos passos visuais e naturalmente lenta.
+- Passos visuais sao ignorados quando o proprio app de automacao esta em primeiro
+  plano (`Template ... ignorado: o proprio app esta em primeiro plano`); sem isso
+  o casamento acertaria a propria interface e clicaria nela. Ainda assim, abra a
+  tela alvo dentro da janela de 6s - em aparelhos lentos pode ser necessario mais
+  tempo (delay configuravel fica para o MVP 4).
+- `adb push` direto para `Android/data/...` pode ser bloqueado pelo scoped
+  storage; nesse caso use
+  `adb push loja.png /data/local/tmp/ && adb shell cp /data/local/tmp/loja.png <pasta de templates>`.
+
 API programatica:
 
 ```kotlin

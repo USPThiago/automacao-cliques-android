@@ -14,6 +14,9 @@ class Template(val name: String, val image: GrayImage)
  * em `Android/data/<pacote>/files/templates/` no armazenamento do aparelho, de
  * modo que podem ser enviados por `adb push` ou por um gerenciador de arquivos
  * sem precisar recompilar o app.
+ *
+ * O cache e sincronizado porque o carregamento acontece na thread de visao e a
+ * invalidacao vem da interface.
  */
 class TemplateStore(private val context: Context) {
 
@@ -32,11 +35,11 @@ class TemplateStore(private val context: Context) {
     /** Template chamado [name] (com ou sem extensao), ou `null` se ausente. */
     fun get(name: String): Template? {
         val key = File(name).nameWithoutExtension.lowercase()
-        return cache.getOrPut(key) { load(key) }
+        return synchronized(cache) { cache.getOrPut(key) { load(key) } }
     }
 
     /** Descarta os templates em memoria, para recarregar do disco. */
-    fun invalidate() = cache.clear()
+    fun invalidate() = synchronized(cache) { cache.clear() }
 
     private fun files(): List<File> = directory()
         .listFiles { file -> file.isFile && file.extension.lowercase() in SUPPORTED_EXTENSIONS }
