@@ -119,12 +119,24 @@ tons de cinza e procura recortes ("templates") por correlacao cruzada normalizad
 clicando no centro da regiao encontrada. Em Android 10 ou anterior a captura nao
 esta disponivel e apenas o MVP 3 funciona.
 
+As capturas **nao sao gravadas** em lugar nenhum: o bitmap vem do sistema em
+memoria, e usado no calculo dos escores e descartado. Os unicos arquivos de
+imagem sao os templates que o usuario instala.
+
+Passo a passo completo para um jogo real (Android Studio, espelhamento de tela e
+extracao dos recortes): [`docs/manual-teste-jogo.md`](docs/manual-teste-jogo.md).
+
 ### Criando os templates
 
 1. Capture a tela do jogo (`adb exec-out screencap -p > tela.png` ou a captura do
    proprio aparelho).
 2. Recorte apenas o elemento a ser clicado (o botao, o icone), sem fundo variavel
-   nem animacao; recortes de 40 a 200 px de lado funcionam bem.
+   nem animacao; recortes de 80 a 300 px de lado funcionam bem. O utilitario
+   `tools/recortar_template.py` recorta sem redimensionar e mostra o centro do
+   recorte (o ponto onde o clique cai):
+   ```
+   python tools/recortar_template.py tela.png loja.png --centro 800 790 --tamanho 170
+   ```
 3. Salve como PNG com um nome curto e sem espacos, ex.: `loja.png`, `fechar_x.png`.
 
 ### Instalando os templates no aparelho
@@ -133,8 +145,13 @@ Os arquivos ficam em `Android/data/com.example.automacaocliques/files/templates/
 (o caminho exato aparece na tela inicial do app):
 
 ```
-adb push loja.png /sdcard/Android/data/com.example.automacaocliques/files/templates/
+adb push loja.png /data/local/tmp/loja.png
+adb shell cp /data/local/tmp/loja.png \
+  /sdcard/Android/data/com.example.automacaocliques/files/templates/loja.png
 ```
+
+(o `push` direto na pasta do app costuma ser bloqueado pelo scoped storage; no
+Android Studio, o `Device Explorer` tambem faz o upload)
 
 Extensoes aceitas: `png`, `jpg`, `jpeg`, `webp`. O nome do template e o nome do
 arquivo sem extensao, em minusculas.
