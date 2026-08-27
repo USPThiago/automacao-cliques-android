@@ -43,6 +43,11 @@ Duas observações honestas:
 | Cabo USB + Depuração USB | Configurações > Sobre o telefone > toque 7x em "Número da versão" → Opções do desenvolvedor > Depuração USB |
 | JDK | 17 (o próprio Android Studio já traz) |
 
+Os comandos deste manual podem ser rodados no terminal embutido do Android Studio
+(`View > Tool Windows > Terminal`, Alt+F12). Onde o exemplo aparece como `bash` e você
+estiver no Windows (PowerShell), veja as variantes na seção 4.1 — o redirecionamento `>`
+do PowerShell corrompe arquivos binários.
+
 Confirme que o aparelho aparece:
 
 ```bash
@@ -117,23 +122,50 @@ recorte é o que determina se a automação funciona.
 
 ### 4.1 Capturar a tela do jogo em resolução nativa
 
-Deixe o jogo exatamente na tela que quer automatizar e rode:
+Deixe o jogo exatamente na tela que quer automatizar. Há dois caminhos.
 
-```bash
-adb exec-out screencap -p > tela_loja.png
-```
+**Caminho A — sem terminal (mais simples).** Na janela **Running Devices** (o
+espelhamento), use o botão de **captura de tela** (ícone de câmera) da barra de
+ferramentas do dispositivo e salve o PNG. A captura sai na resolução real do aparelho,
+não na resolução da janela espelhada.
 
-Esse arquivo tem a resolução real do aparelho (ex.: 1080x2400) — é o que o app "vê".
+**Caminho B — pelo terminal.** No Android Studio: `View > Tool Windows > Terminal`
+(Alt+F12). Ele abre na pasta do projeto.
 
-O botão de captura da janela *Running Devices* também salva na resolução do aparelho e
-serve; o que **não** serve é `Print Screen` do computador ou recortar a janela espelhada,
-porque a janela está redimensionada e os pixels ficam reamostrados.
+- Linux / macOS (bash, zsh):
+  ```bash
+  adb exec-out screencap -p > tela_loja.png
+  ```
+- **Windows (PowerShell, o padrão do terminal do Android Studio)**: o `>` do PowerShell
+  grava em UTF-16 e **corrompe o PNG**. Use:
+  ```powershell
+  adb exec-out screencap -p | Set-Content tela_loja.png -Encoding Byte    # PowerShell 5
+  adb exec-out screencap -p | Set-Content tela_loja.png -AsByteStream     # PowerShell 7
+  ```
+  Alternativa: salvar no aparelho e trazer depois (funciona em qualquer shell):
+  ```powershell
+  adb shell screencap -p /sdcard/tela_loja.png
+  adb pull /sdcard/tela_loja.png
+  ```
 
-Se quiser, veja o tamanho para conferir:
+Se o terminal responder `adb: command not found` / `não é reconhecido`, chame pelo caminho
+completo do SDK (ou adicione `platform-tools` ao PATH):
+
+- Windows: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`
+- Linux: `~/Android/Sdk/platform-tools/adb`
+- macOS: `~/Library/Android/sdk/platform-tools/adb`
+
+O que **não** serve, em nenhum dos caminhos: `Print Screen` do computador ou recortar a
+janela do espelhamento — ela está redimensionada, os pixels ficam reamostrados e o
+casamento falha.
+
+Para conferir a resolução esperada:
 
 ```bash
 adb shell wm size        # ex.: Physical size: 1080x2400
 ```
+
+Abra o PNG salvo e confirme que ele tem esse mesmo tamanho antes de recortar.
 
 ### 4.2 Escolher o que recortar
 
