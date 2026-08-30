@@ -171,7 +171,12 @@ funciona.
 
 1. Capture a tela do app alvo (`adb exec-out screencap -p > tela.png`).
 2. Recorte apenas o elemento a ser clicado, sem fundo variavel nem animacao;
-   recortes de 80 a 300 px de lado funcionam bem.
+   recortes de 80 a 300 px de lado funcionam bem. O utilitario
+   `tools/recortar_template.py` recorta sem redimensionar e imprime o centro do
+   recorte (o ponto onde o clique cai quando a acao nao declara `clicks`):
+   ```
+   python tools/recortar_template.py tela.png loja.png --centro 800 790 --tamanho 170
+   ```
 3. Salve como PNG com nome curto, minusculo e sem espacos: `loja.png`.
 4. Copie para o aparelho (o `adb push` direto em `Android/data/...` costuma ser
    bloqueado pelo scoped storage):

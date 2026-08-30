@@ -199,6 +199,17 @@ abra `tela_loja.png`, use a ferramenta de seleção retangular, corte e salve co
 Anote o retângulo do recorte: ele é útil para escrever a `searchArea` da ação (seção 5) e o
 centro dele é onde o toque cai quando a ação não declara `clicks`.
 
+**Pelo terminal**, o utilitário `tools/recortar_template.py` (requer Pillow: `pip install pillow`)
+recorta sem redimensionar e imprime o centro do recorte:
+
+```bash
+# recorte por retângulo: --caixa ESQUERDA TOPO DIREITA BAIXO
+python tools/recortar_template.py tela_loja.png loja.png --caixa 716 706 885 875
+
+# ou: centro + tamanho (mais natural quando você já sabe onde quer clicar)
+python tools/recortar_template.py tela_loja.png loja.png --centro 800 790 --tamanho 170
+```
+
 Para descobrir as coordenadas: a maioria dos editores mostra a posição do cursor em pixels;
 ou ative `Configurações > Sistema > Opções do desenvolvedor > Local do ponteiro`, toque no
 botão do jogo e leia o X/Y na barra superior.
