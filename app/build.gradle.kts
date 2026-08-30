@@ -39,6 +39,11 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    testOptions {
+        // O log de execucao escreve no Logcat; nos testes JVM as chamadas viram no-op.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

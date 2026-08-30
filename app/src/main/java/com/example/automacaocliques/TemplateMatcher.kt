@@ -26,9 +26,12 @@ data class TemplateMatch(
 /**
  * Casamento de template por correlacao cruzada normalizada (NCC), robusta a
  * mudancas de brilho. A busca e feita em duas etapas: uma varredura grosseira
- * na imagem reduzida (testando algumas escalas, para tolerar telas de resolucao
- * diferente daquela em que o recorte foi feito) e um refinamento em resolucao
- * cheia ao redor do melhor candidato.
+ * na imagem reduzida (testando as escalas pedidas, para tolerar telas de
+ * resolucao diferente daquela em que o recorte foi feito) e um refinamento em
+ * resolucao cheia ao redor dos melhores candidatos.
+ *
+ * O custo cresce com a area varrida e com o numero de escalas, entao o padrao e
+ * uma unica escala e a busca pode ser restrita a uma regiao da tela.
  */
 object TemplateMatcher {
 
@@ -36,7 +39,13 @@ object TemplateMatcher {
     const val DEFAULT_THRESHOLD = 0.80
 
     /** Escalas testadas na busca grosseira. */
-    val DEFAULT_SCALES = listOf(1.0, 0.9, 1.1, 0.8, 1.25, 0.66, 1.5)
+    val DEFAULT_SCALES = listOf(1.0)
+
+    /** Escalas uteis quando o recorte veio de um aparelho de outra resolucao. */
+    val WIDE_SCALES = listOf(1.0, 0.9, 1.1, 0.8, 1.25, 0.66, 1.5)
+
+    /** Escore a partir do qual os demais candidatos deixam de ser refinados. */
+    const val EARLY_EXIT_SCORE = 0.95
 
     private const val COARSE_FACTOR = 8
 
@@ -46,11 +55,34 @@ object TemplateMatcher {
      */
     private const val COARSE_CANDIDATES = 8
 
-    /** Melhor ocorrencia de [template] em [screen], ou `null` se nao couber. */
+    /**
+     * Melhor ocorrencia de [template] dentro de [area] (tela inteira quando
+     * ausente), ou `null` se o template nao couber. Ao encontrar um escore
+     * maior ou igual a [earlyExitScore] a busca para: em telas reais nao ha
+     * ocorrencia melhor a procurar e o refinamento dos demais candidatos so
+     * consumiria tempo.
+     */
     fun findBest(
         screen: GrayImage,
         template: GrayImage,
-        scales: List<Double> = DEFAULT_SCALES
+        scales: List<Double> = DEFAULT_SCALES,
+        area: Area? = null,
+        earlyExitScore: Double = EARLY_EXIT_SCORE
+    ): TemplateMatch? {
+        val clipped = area?.clipTo(Size(screen.width, screen.height))
+        if (clipped != null && (clipped.width < 2 || clipped.height < 2)) return null
+        val region = clipped?.let { screen.crop(it) } ?: screen
+        val offsetX = clipped?.left ?: 0
+        val offsetY = clipped?.top ?: 0
+        return searchRegion(region, template, scales, earlyExitScore)
+            ?.let { it.copy(left = it.left + offsetX, top = it.top + offsetY) }
+    }
+
+    private fun searchRegion(
+        screen: GrayImage,
+        template: GrayImage,
+        scales: List<Double>,
+        earlyExitScore: Double
     ): TemplateMatch? {
         val coarseScreen = screen.downscale(COARSE_FACTOR)
         var best: TemplateMatch? = null
@@ -75,6 +107,7 @@ object TemplateMatcher {
             for (candidate in candidates) {
                 val refined = refine(screen, template, scale, candidate.left, candidate.top) ?: continue
                 if (best == null || refined.score > best.score) best = refined
+                if (refined.score >= earlyExitScore) return best
             }
         }
         return best

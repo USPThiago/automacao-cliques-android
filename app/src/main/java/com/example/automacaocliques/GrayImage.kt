@@ -28,6 +28,20 @@ class GrayImage(
         )
     }
 
+    /** Recorte de [area], que precisa estar contida na imagem. */
+    fun crop(area: Area): GrayImage {
+        require(area.left >= 0 && area.top >= 0 && area.right <= width && area.bottom <= height) {
+            "area ${area.describe()} fora da imagem ${width}x$height"
+        }
+        require(area.width > 0 && area.height > 0) { "area vazia: ${area.describe()}" }
+        if (area.width == width && area.height == height) return this
+        val out = IntArray(area.width * area.height)
+        for (y in 0 until area.height) {
+            System.arraycopy(pixels, (area.top + y) * width + area.left, out, y * area.width, area.width)
+        }
+        return GrayImage(area.width, area.height, out)
+    }
+
     /**
      * Redimensiona a imagem. Ao reduzir, cada pixel de saida e a media da area
      * correspondente na entrada (caso contrario detalhes finos desapareceriam e a
