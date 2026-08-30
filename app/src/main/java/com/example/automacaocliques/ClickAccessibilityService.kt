@@ -8,47 +8,133 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Servico de acessibilidade responsavel por ler a tela e despachar gestos de
- * toque. Expoe [readScreen] / [findNode] (leitura da arvore de acessibilidade) e
- * [click] / [clickNode] / [runSequence] (execucao de um ou mais toques).
+ * Servico de acessibilidade que executa o roteiro de sessoes: captura a tela,
+ * localiza os templates de cada acao e despacha os toques via
+ * [dispatchGesture]. A arvore de acessibilidade e usada apenas para saber qual
+ * app esta em primeiro plano.
  */
 class ClickAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
-     * Thread unica para captura e casamento de templates: a correlacao custa
-     * alguns segundos por template e travaria a interface (ANR) se rodasse na
-     * thread principal.
+     * Thread unica onde o roteiro roda: captura e casamento custam segundos e
+     * travariam a interface (ANR) se rodassem na thread principal.
      */
-    private val visionExecutor = Executors.newSingleThreadExecutor()
+    private val runnerExecutor = Executors.newSingleThreadExecutor()
+
+    /**
+     * Thread separada para as respostas de [takeScreenshot]: a thread do roteiro
+     * fica bloqueada esperando a captura e nao pode receber o proprio callback.
+     */
+    private val captureExecutor = Executors.newSingleThreadExecutor()
 
     /** Recortes usados no reconhecimento visual das telas. */
     val templates: TemplateStore by lazy { TemplateStore(this) }
+
+    /** Arquivos de sessao em `files/sessions/`. */
+    val sessions: SessionStore by lazy { SessionStore(this) }
+
+    private val running = AtomicBoolean(false)
+
+    @Volatile
+    private var runner: SessionRunner? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         isRunning = true
         instance = this
         Log.i(TAG, "Servico conectado")
-        mainHandler.postDelayed({ clickAtScreenCenter() }, INITIAL_CLICK_DELAY_MS)
     }
 
-    /** Dispara um toque unico no centro real da tela. */
-    fun clickAtScreenCenter() {
+    /** Indica se um roteiro esta em execucao. */
+    fun isExecuting(): Boolean = running.get()
+
+    /**
+     * Valida a carga inicial e executa o roteiro a partir de
+     * `sessions/mainSession.json`. Devolve `false` se ja houver uma execucao em
+     * andamento (duas execucoes simultaneas sao impedidas).
+     */
+    fun start(): Boolean {
+        if (!running.compareAndSet(false, true)) {
+            log.add("Execucao", "ja existe uma execucao em andamento")
+            return false
+        }
+        templates.invalidate()
+        runnerExecutor.execute {
+            try {
+                execute()
+            } finally {
+                running.set(false)
+                runner = null
+            }
+        }
+        return true
+    }
+
+    /** Cancela a execucao em andamento, se houver. */
+    fun stop() {
+        runner?.cancel()
+    }
+
+    private fun execute() {
+        val screen = screenSize()
+        when (val load = SessionValidator.load(sessions, templates::sizeOf, screen)) {
+            is SessionLoad.Failure -> {
+                log.add("Carga inicial", "NOK - ${load.reason}")
+                return
+            }
+            is SessionLoad.Ok -> {
+                log.add("Carga inicial", "OK")
+                if (!awaitForeignForeground()) {
+                    log.add("Transicao", "NOK - app em primeiro plano")
+                    return
+                }
+                val sessionRunner = SessionRunner(ServiceEnvironment(), log)
+                runner = sessionRunner
+                when (val outcome = sessionRunner.run(load.main)) {
+                    RunOutcome.Success -> log.add("Execucao", "concluida com sucesso")
+                    RunOutcome.Cancelled -> log.add("Execucao", "parada")
+                    is RunOutcome.Failure -> log.add("Execucao", "encerrada: ${outcome.reason}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Espera a janela ativa deixar de pertencer a este app, para nao capturar e
+     * clicar na propria interface de automacao. Substitui o atraso fixo do MVP 2.
+     */
+    private fun awaitForeignForeground(timeoutMs: Long = FOREGROUND_TIMEOUT_MS): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (!isOwnAppInForeground()) return true
+            SystemClock.sleep(FOREGROUND_POLL_MS)
+        }
+        return !isOwnAppInForeground()
+    }
+
+    private fun isOwnAppInForeground(): Boolean =
+        rootInActiveWindow?.packageName == packageName
+
+    /** Resolucao real da tela, incluindo status bar e barra de navegacao. */
+    fun screenSize(): Size {
         val bounds = screenBounds()
-        click(bounds.exactCenterX(), bounds.exactCenterY())
+        return Size(bounds.width(), bounds.height())
     }
 
-    /** Limites reais da tela, incluindo status bar e barra de navegacao. */
     private fun screenBounds(): Rect {
         val windowManager = getSystemService(WindowManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -60,263 +146,123 @@ class ClickAccessibilityService : AccessibilityService() {
         return Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
     }
 
-    /** Nos visiveis da janela ativa, achatados em ordem de arvore. */
-    fun readScreen(): List<ScreenNode> = ScreenReader.flatten(rootInActiveWindow)
-
-    /** Registra no Logcat todos os nos visiveis da janela ativa. */
-    fun logScreen() {
-        val nodes = readScreen()
-        if (nodes.isEmpty()) {
-            Log.w(TAG, "Leitura de tela vazia (janela ativa sem conteudo acessivel)")
-            return
-        }
-        Log.i(TAG, "Tela de ${nodes.first().packageName}: ${nodes.size} nos visiveis")
-        nodes.forEach { Log.d(TAG, it.describe()) }
-    }
-
-    /** Primeiro no da tela atual que satisfaz [selector], se houver. */
-    fun findNode(selector: NodeSelector): ScreenNode? =
-        ScreenReader.find(readScreen(), selector)
-
-    /** Clica no centro dos limites de [node]. */
-    fun clickNode(node: ScreenNode) {
-        Log.i(TAG, "Clicando no no ${node.describe().trim()}")
-        click(node.centerX, node.centerY)
-    }
-
-    /**
-     * Executa [steps] em ordem, esperando o intervalo de cada passo antes de
-     * executa-lo. A tela e lida novamente a cada passo, de modo que uma mesma
-     * tela pode receber varios cliques e passos seguintes podem depender do
-     * resultado dos anteriores.
-     */
-    fun runSequence(steps: List<ClickStep>) {
-        if (steps.isEmpty()) {
-            Log.w(TAG, "Sequencia vazia, nada a executar")
-            return
-        }
-        Log.i(TAG, "Iniciando sequencia com ${steps.size} passo(s)")
-        scheduleStep(steps, 0)
-    }
-
     /**
      * Captura a tela via [takeScreenshot] e entrega o bitmap (ou `null` em caso
-     * de falha) em [visionExecutor], nunca na thread principal. Requer Android 11
-     * (API 30); em versoes anteriores nao ha captura de tela pela API de
+     * de falha) em [captureExecutor], nunca na thread principal. Requer Android
+     * 11 (API 30); em versoes anteriores nao ha captura pela API de
      * acessibilidade.
      */
-    fun captureScreen(onResult: (Bitmap?) -> Unit) {
+    private fun captureScreen(onResult: (Bitmap?, Int) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Log.w(TAG, "Captura de tela exige Android 11 (API 30); atual=${Build.VERSION.SDK_INT}")
-            onResult(null)
+            onResult(null, UNSUPPORTED_API_ERROR)
             return
         }
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
-            visionExecutor,
+            captureExecutor,
             object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     val bitmap = screenshot.hardwareBuffer.use { buffer ->
                         Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
                             ?.copy(Bitmap.Config.ARGB_8888, false)
                     }
-                    if (bitmap == null) Log.w(TAG, "Nao foi possivel converter a captura de tela")
-                    onResult(bitmap)
+                    onResult(bitmap, if (bitmap == null) CONVERSION_ERROR else 0)
                 }
 
                 override fun onFailure(errorCode: Int) {
-                    Log.w(TAG, "Falha na captura de tela (codigo=$errorCode)")
-                    onResult(null)
+                    onResult(null, errorCode)
                 }
             }
         )
     }
 
-    /**
-     * Procura o template [name] na tela atual e entrega a melhor ocorrencia com
-     * escore acima de [threshold], ou `null`. O resultado chega na thread
-     * principal.
-     */
-    fun findTemplate(
-        name: String,
-        threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
-        onResult: (TemplateMatch?) -> Unit
-    ) {
-        val template = templates.get(name)
-        if (template == null) {
-            onResult(null)
-            return
-        }
-        if (isOwnAppInForeground()) {
-            Log.w(TAG, "Template '$name' ignorado: o proprio app esta em primeiro plano")
-            onResult(null)
-            return
-        }
-        captureScreen { bitmap ->
-            if (bitmap == null) {
-                mainHandler.post { onResult(null) }
-                return@captureScreen
-            }
-            val match = TemplateMatcher.findBest(bitmap.toGrayImage(), template.image)
-            when {
-                match == null -> Log.w(TAG, "Template '$name' nao cabe na tela")
-                match.score < threshold ->
-                    Log.w(TAG, "Template '$name' abaixo do limite: ${match.describe()}")
-                else -> Log.i(TAG, "Template '$name' encontrado: ${match.describe()}")
-            }
-            val accepted = match?.takeIf { it.score >= threshold }
-            mainHandler.post { onResult(accepted) }
-        }
-    }
-
-    /**
-     * Indica se a janela ativa pertence a este app. Um passo visual executado
-     * nesse estado casaria a propria interface de automacao em vez da tela alvo.
-     */
-    private fun isOwnAppInForeground(): Boolean =
-        rootInActiveWindow?.packageName == packageName
-
-    /** Clica no centro da ocorrencia do template [name], se encontrada. */
-    fun clickTemplate(
-        name: String,
-        threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
-        onDone: () -> Unit = {}
-    ) {
-        findTemplate(name, threshold) { match ->
-            if (match == null) {
-                Log.w(TAG, "Template '$name' nao encontrado; nenhum clique despachado")
-            } else {
-                click(match.centerX, match.centerY)
-            }
-            onDone()
-        }
-    }
-
-    /**
-     * Compara todos os templates disponiveis com a tela atual e registra os
-     * escores em ordem decrescente, identificando a variante de tela mais
-     * provavel. Entrega o nome do melhor template acima de [threshold].
-     */
-    fun identifyScreen(
-        threshold: Double = TemplateMatcher.DEFAULT_THRESHOLD,
-        onResult: (String?) -> Unit = {}
-    ) {
-        if (templates.names().isEmpty()) {
-            Log.w(TAG, "Nenhum template em ${templates.directory()}")
-            onResult(null)
-            return
-        }
-        captureScreen { bitmap ->
-            if (bitmap == null) {
-                mainHandler.post { onResult(null) }
-                return@captureScreen
-            }
-            val available = templates.all()
-            val screen = bitmap.toGrayImage()
-            Log.i(TAG, "Reconhecendo tela ${screen.width}x${screen.height} com ${available.size} template(s)")
-            val scored = available
-                .mapNotNull { template ->
-                    TemplateMatcher.findBest(screen, template.image)?.let { template.name to it }
-                }
-                .sortedByDescending { it.second.score }
-            scored.forEach { (name, match) -> Log.i(TAG, "  $name -> ${match.describe()}") }
-
-            val best = scored.firstOrNull()?.takeIf { it.second.score >= threshold }
-            if (best == null) {
-                Log.w(TAG, "Nenhum template acima do limite $threshold")
-            } else {
-                Log.i(TAG, "Tela reconhecida como '${best.first}'")
-            }
-            val name = best?.first
-            mainHandler.post { onResult(name) }
-        }
-    }
-
-    /** Cancela uma sequencia agendada e cliques pendentes. */
-    fun cancelSequence() {
-        mainHandler.removeCallbacksAndMessages(null)
-        Log.i(TAG, "Sequencia cancelada")
-    }
-
-    private fun scheduleStep(steps: List<ClickStep>, index: Int) {
-        if (index !in steps.indices) {
-            Log.i(TAG, "Sequencia finalizada")
-            return
-        }
-        val step = steps[index]
-        mainHandler.postDelayed({
-            executeStep(step, index, steps.size) { scheduleStep(steps, index + 1) }
-        }, step.delayMs)
-    }
-
-    /** Executa um passo e chama [onDone] quando ele termina. */
-    private fun executeStep(step: ClickStep, index: Int, total: Int, onDone: () -> Unit) {
-        val label = "passo ${index + 1}/$total"
-        when (step) {
-            is ClickStep.AtPoint -> {
-                Log.i(TAG, "$label: clique em (${step.x}, ${step.y})")
-                click(step.x, step.y)
-                onDone()
-            }
-            is ClickStep.OnNode -> {
-                val node = findNode(step.selector)
-                if (node == null) {
-                    Log.w(TAG, "$label: nenhum no encontrado para ${step.selector.describe()}")
-                } else {
-                    Log.i(TAG, "$label: ${step.selector.describe()}")
-                    clickNode(node)
-                }
-                onDone()
-            }
-            is ClickStep.OnTemplate -> {
-                Log.i(TAG, "$label: template '${step.name}' (limite ${step.threshold})")
-                clickTemplate(step.name, step.threshold, onDone)
-            }
-        }
-    }
-
     /** Constroi e despacha um gesto de toque em ([x], [y]). */
-    fun click(x: Float, y: Float) {
+    fun click(x: Float, y: Float, onOutcome: (ClickOutcome) -> Unit = {}) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0L, CLICK_DURATION_MS))
             .build()
 
-        Log.i(TAG, "Despachando clique em x=$x y=$y")
         val dispatched = dispatchGesture(
             gesture,
             object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                    Log.d(TAG, "Gesto concluido em x=$x y=$y")
+                    onOutcome(ClickOutcome.COMPLETED)
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    Log.w(TAG, "Gesto cancelado em x=$x y=$y")
+                    onOutcome(ClickOutcome.CANCELLED)
                 }
             },
             null
         )
-        if (!dispatched) {
-            Log.w(TAG, "dispatchGesture retornou false para x=$x y=$y")
-        }
+        if (!dispatched) onOutcome(ClickOutcome.REJECTED)
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
-        Log.d(
-            TAG,
-            "Evento ${AccessibilityEvent.eventTypeToString(event.eventType)} " +
-                "pacote=${event.packageName} classe=${event.className}"
-        )
+    /** Ponte entre o executor de sessoes e as APIs do aparelho. */
+    private inner class ServiceEnvironment : RunnerEnvironment {
+
+        override fun capture(): Capture {
+            val latch = CountDownLatch(1)
+            var result: Capture = Capture.Failed(TIMEOUT_ERROR)
+            captureScreen { bitmap, errorCode ->
+                result = if (bitmap == null) {
+                    Capture.Failed(errorCode)
+                } else {
+                    Capture.Ok(bitmap.toGrayImage()).also { bitmap.recycle() }
+                }
+                latch.countDown()
+            }
+            if (!latch.await(CAPTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                return Capture.Failed(TIMEOUT_ERROR)
+            }
+            return result
+        }
+
+        override fun click(x: Float, y: Float): ClickOutcome {
+            val latch = CountDownLatch(1)
+            var outcome = ClickOutcome.REJECTED
+            mainHandler.post {
+                this@ClickAccessibilityService.click(x, y) {
+                    outcome = it
+                    latch.countDown()
+                }
+            }
+            if (!latch.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                return ClickOutcome.CANCELLED
+            }
+            return outcome
+        }
+
+        override fun templateOf(name: String): GrayImage? = templates.get(name)?.image
+
+        override fun loadSession(fileName: String): Session? {
+            val text = sessions.read(fileName) ?: return null
+            return try {
+                SessionParser.parse(fileName, text)
+            } catch (e: SessionFormatException) {
+                Log.w(TAG, e.message.orEmpty())
+                null
+            }
+        }
+
+        override fun sleep(ms: Long) = SystemClock.sleep(ms)
+
+        override fun elapsedMs(): Long = SystemClock.elapsedRealtime()
     }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
 
     override fun onInterrupt() {
         Log.w(TAG, "Servico interrompido")
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
+        stop()
         mainHandler.removeCallbacksAndMessages(null)
-        visionExecutor.shutdownNow()
+        runnerExecutor.shutdownNow()
+        captureExecutor.shutdownNow()
         isRunning = false
         instance = null
         Log.i(TAG, "Servico desconectado")
@@ -326,11 +272,29 @@ class ClickAccessibilityService : AccessibilityService() {
     companion object {
         const val TAG = "ClickService"
 
-        /** Atraso antes do clique automatico, para o usuario sair das Configuracoes. */
-        private const val INITIAL_CLICK_DELAY_MS = 6_000L
-
         /** Duracao do toque despachado. */
         private const val CLICK_DURATION_MS = 50L
+
+        /** Espera maxima ate o app sair do primeiro plano depois de Iniciar. */
+        private const val FOREGROUND_TIMEOUT_MS = 15_000L
+
+        private const val FOREGROUND_POLL_MS = 200L
+
+        private const val CAPTURE_TIMEOUT_MS = 10_000L
+
+        private const val GESTURE_TIMEOUT_MS = 10_000L
+
+        private const val UNSUPPORTED_API_ERROR = -1
+
+        private const val CONVERSION_ERROR = -2
+
+        private const val TIMEOUT_ERROR = -3
+
+        /**
+         * Linhas de execucao mostradas na interface. Fica no servico (e nao na
+         * Activity) porque o app roda em segundo plano durante a execucao.
+         */
+        val log = ExecutionLog()
 
         /**
          * Indica se o servico esta conectado nesta instancia do processo. Reflete o

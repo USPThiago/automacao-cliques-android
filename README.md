@@ -25,15 +25,15 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
   do aparelho, com log de eventos e indicador de status na tela inicial.
 - **MVP 2**: clique programatico unico no centro da tela via
   `dispatchGesture()`, disparado ~6s depois de o servico ser ativado.
-- **MVP 3**: leitura da tela via `AccessibilityNodeInfo` (texto, content
-  description, view id, classe e coordenadas) e execucao de varios cliques por
-  tela, resolvidos por termo no momento do clique.
-- **MVP 3.5 (atual)**: reconhecimento visual por captura de tela + template
-  matching, para telas sem arvore de acessibilidade (jogos).
-- **MVP 4**: UI para cadastrar/editar/salvar sequencias (coordenadas + delays) e
-  iniciar/parar a execucao.
-- **MVP 5**: overlay flutuante (start/stop sem sair do app alvo) e persistencia
-  das sequencias.
+- **MVP 3**: leitura da tela via `AccessibilityNodeInfo` e cliques resolvidos por
+  termo (removido no MVP 4).
+- **MVP 3.5**: reconhecimento visual por captura de tela + template matching,
+  para telas sem arvore de acessibilidade (jogos).
+- **MVP 4 (atual)**: roteiros declarados em sessoes JSON no aparelho, busca
+  restrita por `searchArea` com escala unica e early exit, e interface
+  intermediaria com log de execucao (Iniciar/Parar/Limpar/Copiar).
+- **MVP 5**: overlay flutuante (start/stop sem sair do app alvo) e edicao das
+  sessoes pela propria interface.
 
 ## Como rodar
 
@@ -58,132 +58,150 @@ botao que abre as configuracoes de acessibilidade do sistema.
 4. Os eventos recebidos aparecem no Logcat:
    `adb logcat -s ClickService`.
 
-## Clique automatico (MVP 2)
+## Sessoes em JSON (MVP 4)
 
-Ao ativar o servico, ele agenda um clique unico no centro da tela para ~6 segundos
-depois, tempo suficiente para sair das Configuracoes e abrir a tela alvo.
-
-Para acompanhar:
+O roteiro nao e mais digitado na tela: ele vive em arquivos JSON no aparelho, em
 
 ```
-adb logcat -s ClickService
+Android/data/com.example.automacaocliques/files/sessions/
 ```
 
-Os logs mostram `Despachando clique em x=... y=...` e, em seguida,
-`Gesto concluido` (ou `Gesto cancelado`). Para confirmar visualmente, ative
-`Opcoes do desenvolvedor > Mostrar toques`.
-
-O centro vem de `WindowManager.currentWindowMetrics` (API 30+) ou de
-`Display.getRealMetrics()` nas versoes anteriores, ou seja, o centro fisico da
-tela, incluindo status bar e barra de navegacao.
-
-## Leitura da tela e sequencia de cliques (MVP 3)
-
-O servico le a janela ativa e resolve cada clique no momento em que ele vai ser
-executado, o que permite varios cliques na mesma tela e passos que dependem do
-resultado dos anteriores.
-
-- **Ler tela agora**: registra no Logcat todos os nos visiveis com texto,
-  content description, view id, classe, `bounds` e centro (`ClickService`).
-- **Executar sequencia (6s)**: digite termos separados por virgula (ex.:
-  `5, 0, Iniciar`); cada termo casa com texto, content description ou view id do
-  elemento, sem diferenciar maiusculas. O primeiro clique acontece 6s depois
-  (tempo de abrir a tela alvo) e os seguintes a cada 1s. Termos nao encontrados
-  geram `nenhum no encontrado para termo~...` no Logcat e a sequencia continua.
-
-A arvore de acessibilidade so mostra o que o app alvo publica nela. Jogos (Unity,
-Unreal, canvas) desenham tudo numa unica `SurfaceView` e nao publicam textos nem
-botoes, entao nenhuma busca por termo funciona nessas telas - use o
-reconhecimento visual do MVP 3.5.
-
-API programatica (`ClickAccessibilityService`):
-
-```kotlin
-service.readScreen()                                  // List<ScreenNode>
-service.findNode(NodeSelector(term = "Iniciar"))      // busca por texto/desc/id
-service.runSequence(
-    listOf(
-        ClickStep.OnNode(NodeSelector(term = "5"), delayMs = 3_000),
-        ClickStep.OnNode(NodeSelector(term = "0")),
-        ClickStep.AtPoint(540f, 1170f, delayMs = 500)
-    )
-)
-service.cancelSequence()
-```
-
-## Reconhecimento visual por template (MVP 3.5)
-
-Para telas sem arvore de acessibilidade, o servico captura a tela
-(`AccessibilityService.takeScreenshot()`, **Android 11 / API 30+**), converte para
-tons de cinza e procura recortes ("templates") por correlacao cruzada normalizada,
-clicando no centro da regiao encontrada. Em Android 10 ou anterior a captura nao
-esta disponivel e apenas o MVP 3 funciona.
-
-### Criando os templates
-
-1. Capture a tela do jogo (`adb exec-out screencap -p > tela.png` ou a captura do
-   proprio aparelho).
-2. Recorte apenas o elemento a ser clicado (o botao, o icone), sem fundo variavel
-   nem animacao; recortes de 40 a 200 px de lado funcionam bem.
-3. Salve como PNG com um nome curto e sem espacos, ex.: `loja.png`, `fechar_x.png`.
-
-### Instalando os templates no aparelho
-
-Os arquivos ficam em `Android/data/com.example.automacaocliques/files/templates/`
-(o caminho exato aparece na tela inicial do app):
+e os recortes usados no reconhecimento visual em
 
 ```
-adb push loja.png /sdcard/Android/data/com.example.automacaocliques/files/templates/
+Android/data/com.example.automacaocliques/files/templates/
+```
+
+Os dois caminhos aparecem na tela inicial do app. A execucao **sempre** comeca em
+`sessions/mainSession.json`.
+
+Cada sessao descreve **uma tela** do app alvo: uma lista de acoes avaliadas na
+ordem declarada, das quais **apenas a primeira localizada e executada**. Ao
+terminar, a acao pode chamar (`call`) outra sessao; sem `call`, a execucao
+termina com sucesso. Ciclos (A chama B, B chama A) sao permitidos e a parada
+natural e a exaustao das tentativas de uma sessao.
+
+### Exemplo comentado
+
+O JSON nao aceita comentarios; os `//` abaixo sao apenas explicativos.
+
+```jsonc
+{
+  "name": "tela inicial",                       // nome exibido no log
+  "screen": { "width": 1080, "height": 2400 },  // resolucao onde as coordenadas foram medidas
+                                                // (omita se foram medidas no proprio aparelho)
+  "retries": 5,                                 // tentativas adicionais (total = 1 + retries); padrao 3
+  "retryDelayMs": 1000,                         // espera entre tentativas; padrao 1000
+
+  "actions": [                                  // avaliadas em ordem; so a primeira localizada roda
+    {
+      "name": "fechar promocao",
+      "locate": "fechar_x",                     // templates/fechar_x.png
+      "threshold": 0.8,                         // escore minimo; padrao 0.80
+      "scales": [1.0],                          // padrao [1.0]
+      "searchArea": {                           // restringe a busca (muito mais rapido);
+        "left": 700, "top": 100,                // padrao: tela inteira
+        "right": 1080, "bottom": 500
+      },
+      "clicks": [                               // omita para clicar no centro do recorte encontrado
+        { "x": 980, "y": 220 },
+        { "x": 540, "y": 1800, "delayMs": 500 } // delayMs do ponto tem precedencia sobre clickIntervalMs
+      ],
+      "clickIntervalMs": 300,                   // espera entre cliques; padrao 300
+      "waitAfterMs": 1000,                      // espera apos o ultimo clique; padrao 1000
+      "call": "menu_principal"                  // proxima sessao: sessions/menu_principal.json
+    },
+    {
+      "name": "entrar no jogo",                 // so e avaliada se a anterior nao for localizada
+      "locate": "botao_jogar"                   // sem "call": termina com sucesso
+    }
+  ]
+}
+```
+
+Coordenadas e `searchArea` sao escalonadas de `screen` para a resolucao real do
+aparelho; sem `screen`, sao usadas como estao.
+
+### Validacao da carga inicial
+
+Ao abrir o app e ao tocar em **Iniciar**, tudo e conferido antes de qualquer
+clique; qualquer falha impede o inicio e o log indica o arquivo e o campo:
+
+- `mainSession.json` existe e e JSON valido;
+- toda sessao tem `name` e ao menos uma acao; toda acao tem `name` e `locate`;
+- todo `call` aponta para uma sessao existente em `sessions/`;
+- todo `locate` tem imagem correspondente em `templates/`;
+- `searchArea` tem os quatro campos, com `right > left`, `bottom > top`, dentro
+  da tela e comportando o template depois do escalonamento;
+- `threshold` entre 0.0 e 1.0; tempos e `retries` nao negativos.
+
+## Interface
+
+A tela do app e apenas o painel de controle (retrato fixo):
+
+- status do servico e atalho para as configuracoes de acessibilidade;
+- caminhos de `templates/` e `sessions/`;
+- **Iniciar** (valida a carga, manda o app para segundo plano com
+  `moveTaskToBack(true)` e espera ate 15 s o app alvo voltar ao primeiro plano
+  antes da primeira captura), **Parar**, **Limpar** e **Copiar**;
+- caixa de log com as ultimas 500 linhas, mantida pelo servico (sobrevive ao
+  fechamento da tela) e espelhada no Logcat com a tag `ClickService`.
+
+Rotulos do log: `Carga inicial`, `Sessao`, `Tentativa`, `Acao`, `Escala`,
+`Tempo captura`, `Tempo localizacao`, `Posicao inicial`, `Posicao final`,
+`Clique`, `Transicao`, `Tempo acao`, `Tempo total`.
+
+## Reconhecimento visual
+
+O servico captura a tela (`AccessibilityService.takeScreenshot()`, **Android 11 /
+API 30+**), converte para tons de cinza e procura os templates por correlacao
+cruzada normalizada. Em Android 10 ou anterior a captura nao existe e o app nao
+funciona.
+
+- uma captura por tentativa, compartilhada por todas as acoes daquela tentativa;
+- escala unica (`[1.0]`) por padrao; declare mais escalas so quando o recorte vier
+  de um aparelho de resolucao diferente;
+- `searchArea` limita o casamento ao recorte informado, que e o maior ganho de
+  desempenho;
+- a busca para assim que atinge escore >= 0.95;
+- os tempos de captura, localizacao, acao e total aparecem no log, medidos com
+  relogio monotonico (`SystemClock.elapsedRealtime`).
+
+### Criando e instalando os templates
+
+1. Capture a tela do app alvo (`adb exec-out screencap -p > tela.png`).
+2. Recorte apenas o elemento a ser clicado, sem fundo variavel nem animacao;
+   recortes de 80 a 300 px de lado funcionam bem.
+3. Salve como PNG com nome curto, minusculo e sem espacos: `loja.png`.
+4. Copie para o aparelho (o `adb push` direto em `Android/data/...` costuma ser
+   bloqueado pelo scoped storage):
+
+```
+adb push loja.png /data/local/tmp/loja.png
+adb shell cp /data/local/tmp/loja.png \
+  /sdcard/Android/data/com.example.automacaocliques/files/templates/loja.png
 ```
 
 Extensoes aceitas: `png`, `jpg`, `jpeg`, `webp`. O nome do template e o nome do
-arquivo sem extensao, em minusculas.
+arquivo sem extensao, e e ele que vai no campo `locate`.
 
-### Usando
+Passo a passo completo de captura, recorte e teste num jogo real:
+[docs/manual-teste-jogo.md](docs/manual-teste-jogo.md).
 
-- **Reconhecer tela (templates)**: compara a captura atual com todos os templates
-  instalados e registra no Logcat os escores em ordem decrescente, identificando a
-  variante de tela mais provavel:
+## Limitacoes conhecidas
 
-  ```
-  Reconhecendo tela 1080x2340 com 3 template(s)
-    loja -> score=0.941 escala=1.00 centro=(864.0, 1520.0) regiao=[...]
-    batalha -> score=0.402 ...
-  Tela reconhecida como 'loja'
-  ```
-
-- Numa sequencia, prefixe o termo com `@` para clicar por imagem em vez de por
-  texto: `@loja, @fechar_x, Iniciar` mistura cliques visuais e por nos.
-- O escore vai de -1 a 1 (1 = identico) e o limite padrao para aceitar um
-  casamento e **0.80**; abaixo dele o clique nao e despachado e o Logcat registra
-  `abaixo do limite`. Escores baixos costumam indicar recorte com fundo animado,
-  resolucao muito diferente ou tela errada.
-- O template e testado em varias escalas (0.66x a 1.5x), o que tolera aparelhos
-  com resolucao diferente daquela usada no recorte.
-
-### Limitacoes conhecidas
-
-- Cada template custa alguns segundos numa tela 1080x2340. A captura e a
-  correlacao rodam numa thread de background (na thread principal causavam ANR),
-  mas uma sequencia com muitos passos visuais e naturalmente lenta.
-- Passos visuais sao ignorados quando o proprio app de automacao esta em primeiro
-  plano (`Template ... ignorado: o proprio app esta em primeiro plano`); sem isso
-  o casamento acertaria a propria interface e clicaria nela. Ainda assim, abra a
-  tela alvo dentro da janela de 6s - em aparelhos lentos pode ser necessario mais
-  tempo (delay configuravel fica para o MVP 4).
-- `adb push` direto para `Android/data/...` pode ser bloqueado pelo scoped
-  storage; nesse caso use
-  `adb push loja.png /data/local/tmp/ && adb shell cp /data/local/tmp/loja.png <pasta de templates>`.
-
-API programatica:
-
-```kotlin
-service.identifyScreen { name -> /* melhor template acima do limite */ }
-service.findTemplate("loja") { match -> /* TemplateMatch com centro e escore */ }
-service.clickTemplate("loja", threshold = 0.85)
-service.runSequence(listOf(ClickStep.OnTemplate("loja", delayMs = 6_000)))
-```
+- Nenhum app pode trazer outro app arbitrario para o primeiro plano: o app apenas
+  sai da frente e espera. Se o app alvo nao voltar em 15 s, o log registra
+  `Transicao NOK - app em primeiro plano` e a execucao termina.
+- Telas protegidas com `FLAG_SECURE` nao podem ser capturadas
+  (`Transicao NOK - captura falhou (codigo=...)`).
+- O app e exclusivamente visual: elementos que so existem na arvore de
+  acessibilidade, sem aparencia estavel, nao sao automatizaveis. A arvore e usada
+  apenas para saber qual app esta em primeiro plano, o que exige manter
+  `canRetrieveWindowContent="true"` no `accessibility_service_config.xml`.
+- Alguns jogos com anti-cheat descartam toques injetados por acessibilidade.
 
 Em Android 13+ um app instalado fora da loja (sideload) pode ter o acesso a
 acessibilidade bloqueado. Nesse caso abra `Configuracoes > Apps > Automacao Cliques`,
-menu (tres pontos) e escolha **Permitir configuracoes restritas** antes do passo 2.
+menu (tres pontos) e escolha **Permitir configuracoes restritas** antes de ativar
+o servico.
