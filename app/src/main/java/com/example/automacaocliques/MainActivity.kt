@@ -1,17 +1,26 @@
 package com.example.automacaocliques
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.automacaocliques.databinding.ActivityMainBinding
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+
+    /** Leitura dos arquivos de sessao e templates fora da thread principal. */
+    private val ioExecutor = Executors.newSingleThreadExecutor()
+
+    private val log = ClickAccessibilityService.log
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,67 +28,93 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.openSettingsButton.setOnClickListener { openAccessibilitySettings() }
-        binding.readScreenButton.setOnClickListener { readScreen() }
-        binding.runSequenceButton.setOnClickListener { runSequence() }
-        binding.identifyScreenButton.setOnClickListener { identifyScreen() }
+        binding.startButton.setOnClickListener { start() }
+        binding.stopButton.setOnClickListener { stop() }
+        binding.clearLogButton.setOnClickListener { log.clear() }
+        binding.copyLogButton.setOnClickListener { copyLog() }
 
         binding.templatesPath.text =
             getString(R.string.templates_dir, TemplateStore(this).directory().absolutePath)
-    }
+        binding.sessionsPath.text =
+            getString(R.string.sessions_dir, SessionStore(this).directory().absolutePath)
 
-    /** Compara a tela atual com os templates instalados e loga os escores. */
-    private fun identifyScreen() {
-        val service = ClickAccessibilityService.instance
-        if (service == null) {
-            toast(R.string.service_inactive_warning)
-            return
-        }
-        service.templates.invalidate()
-        service.identifyScreen()
-        toast(R.string.identifying_screen)
-    }
-
-    /** Pede ao servico um dump da janela ativa no Logcat. */
-    private fun readScreen() {
-        val service = ClickAccessibilityService.instance
-        if (service == null) {
-            toast(R.string.service_inactive_warning)
-            return
-        }
-        service.logScreen()
-        toast(R.string.screen_logged)
-    }
-
-    /**
-     * Agenda uma sequencia de cliques a partir dos termos digitados. O primeiro
-     * clique acontece apos [START_DELAY_MS] para dar tempo de abrir a tela alvo.
-     */
-    private fun runSequence() {
-        val service = ClickAccessibilityService.instance
-        if (service == null) {
-            toast(R.string.service_inactive_warning)
-            return
-        }
-        val steps = ClickStep.fromTerms(
-            input = binding.sequenceInput.text?.toString().orEmpty(),
-            delayMs = STEP_DELAY_MS,
-            firstDelayMs = START_DELAY_MS
-        )
-        if (steps.isEmpty()) {
-            toast(R.string.sequence_empty)
-            return
-        }
-        service.runSequence(steps)
-        toast(R.string.sequence_scheduled)
-    }
-
-    private fun toast(messageRes: Int) {
-        Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+        validateLoad()
     }
 
     override fun onResume() {
         super.onResume()
         updateStatus()
+        log.listener = { runOnUiThread(::showLog) }
+        showLog()
+    }
+
+    override fun onPause() {
+        log.listener = null
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        ioExecutor.shutdownNow()
+        super.onDestroy()
+    }
+
+    /**
+     * Valida a carga inicial e registra o resultado no log. Roda ao abrir o app e
+     * de novo no servico quando a execucao comeca.
+     */
+    private fun validateLoad() {
+        ioExecutor.execute {
+            val result = validateInstalledSessions(this)
+            when (result) {
+                is SessionLoad.Ok -> log.add("Carga inicial", "OK")
+                is SessionLoad.Failure -> log.add("Carga inicial", "NOK - ${result.reason}")
+            }
+        }
+    }
+
+    /**
+     * Inicia o roteiro e manda o app para segundo plano, revelando o app que
+     * estava atras. O servico espera o primeiro plano deixar de ser este app
+     * antes da primeira captura.
+     */
+    private fun start() {
+        val service = ClickAccessibilityService.instance
+        if (service == null) {
+            toast(R.string.service_inactive_warning)
+            return
+        }
+        if (!service.start()) {
+            toast(R.string.execution_already_running)
+            return
+        }
+        toast(R.string.execution_started)
+        moveTaskToBack(true)
+    }
+
+    private fun stop() {
+        val service = ClickAccessibilityService.instance
+        if (service == null) {
+            toast(R.string.service_inactive_warning)
+            return
+        }
+        service.stop()
+        toast(R.string.execution_stopping)
+    }
+
+    private fun copyLog() {
+        val clipboard = getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), log.text()))
+        toast(R.string.log_copied)
+    }
+
+    /** Mostra o log do servico, rolando ate a ultima linha. */
+    private fun showLog() {
+        binding.logText.text = log.text()
+        binding.logScroll.post { binding.logScroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun toast(messageRes: Int) {
+        Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
     }
 
     private fun updateStatus() {
@@ -102,13 +137,5 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.accessibility_settings_unavailable, Toast.LENGTH_LONG)
                 .show()
         }
-    }
-
-    private companion object {
-        /** Espera antes do primeiro clique, para o usuario abrir a tela alvo. */
-        const val START_DELAY_MS = 6_000L
-
-        /** Intervalo entre os cliques seguintes. */
-        const val STEP_DELAY_MS = 1_000L
     }
 }

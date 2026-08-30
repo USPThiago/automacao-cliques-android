@@ -7,15 +7,16 @@
     <string name="service_status_disabled">Servico de acessibilidade: INATIVO</string>
     <string name="open_accessibility_settings">Abrir configuracoes de acessibilidade</string>
     <string name="accessibility_settings_unavailable">Nao foi possivel abrir as configuracoes de acessibilidade.</string>
-    <string name="read_screen">Ler tela agora</string>
-    <string name="run_sequence">Executar sequencia (6s)</string>
-    <string name="identify_screen">Reconhecer tela (templates)</string>
-    <string name="sequence_hint">Termos separados por virgula (ex.: 5, Iniciar, @loja)</string>
+    <string name="start_execution">Iniciar</string>
+    <string name="stop_execution">Parar</string>
+    <string name="execution_log">Log de execucao</string>
+    <string name="clear_log">Limpar</string>
+    <string name="copy_log">Copiar</string>
+    <string name="log_copied">Log copiado para a area de transferencia.</string>
     <string name="templates_dir">Templates em: %1$s</string>
-    <string name="identifying_screen">Reconhecendo a tela: veja o Logcat.</string>
+    <string name="sessions_dir">Sessoes em: %1$s</string>
     <string name="service_inactive_warning">Ative o servico de acessibilidade primeiro.</string>
-    <string name="sequence_empty">Informe ao menos um termo.</string>
-    <string name="sequence_scheduled">Sequencia agendada: abra a tela alvo agora (6s).</string>
-    <string name="screen_logged">Tela lida: veja o Logcat (tag ClickService).</string>
-    <string name="logcat_hint">Eventos recebidos sao registrados no Logcat com a tag ClickService.</string>
+    <string name="execution_started">Execucao iniciada: abra a tela alvo.</string>
+    <string name="execution_stopping">Parando a execucao.</string>
+    <string name="execution_already_running">Ja existe uma execucao em andamento.</string>
 </resources>

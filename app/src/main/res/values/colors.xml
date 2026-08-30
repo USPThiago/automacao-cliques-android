@@ -4,4 +4,5 @@
     <color name="white">#FFFFFFFF</color>
     <color name="status_enabled">#FF2E7D32</color>
     <color name="status_disabled">#FFC62828</color>
+    <color name="log_background">#FFF1F1F1</color>
 </resources>

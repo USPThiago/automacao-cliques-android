@@ -38,6 +38,19 @@ class TemplateStore(private val context: Context) {
         return synchronized(cache) { cache.getOrPut(key) { load(key) } }
     }
 
+    /**
+     * Dimensoes do template [name] sem decodificar a imagem inteira, para a
+     * validacao da carga inicial.
+     */
+    fun sizeOf(name: String): Size? {
+        val key = File(name).nameWithoutExtension.lowercase()
+        val file = files().firstOrNull { it.nameWithoutExtension.lowercase() == key } ?: return null
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null
+        return Size(options.outWidth, options.outHeight)
+    }
+
     /** Descarta os templates em memoria, para recarregar do disco. */
     fun invalidate() = synchronized(cache) { cache.clear() }
 
