@@ -197,7 +197,7 @@ Notas:
 
 ### 5.1 Estrutura da tela
 
-- **Orientação fixa em retrato** (`android:screenOrientation="portrait"`).
+- **Orientação fixa em paisagem** (`android:screenOrientation="landscape"`).
 - Elementos mantidos: status do serviço (ATIVO/INATIVO), botão para abrir as configurações de
   acessibilidade, caminho das pastas `templates/` e `sessions/`.
 - Elementos **removidos**: campo de digitação de sequência, botão "Executar sequência",
@@ -270,7 +270,7 @@ mas cujo elemento não é visualmente estável, deixam de ser automatizáveis.
 | `SessionStore.kt`, `Session.kt`, `SessionParser.kt`, `SessionValidator.kt`, `SessionRunner.kt` | novos |
 | `ExecutionLog.kt` | novo (buffer de 500 linhas no serviço) |
 | `MainActivity.kt`, `activity_main.xml`, `strings.xml` | interface intermediária |
-| `AndroidManifest.xml` | `screenOrientation="portrait"` |
+| `AndroidManifest.xml` | `screenOrientation="landscape"` |
 | `ScreenReader.kt`, `ClickStep.kt`, `ClickStepTest.kt`, `ScreenReaderTest.kt` | removidos |
 | `docs/manual-teste-jogo.md`, `README.md` | atualizados (sessões em vez de termos) |
 
