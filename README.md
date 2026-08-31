@@ -35,6 +35,9 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 - **MVP 5**: overlay flutuante (start/stop sem sair do app alvo) e edicao das
   sessoes pela propria interface.
 
+Pendencias abertas e o que esta fora do escopo atual:
+[docs/backlog.md](docs/backlog.md).
+
 ## Como rodar
 
 1. Clone o repositorio e abra a pasta no Android Studio (`File > Open`), aguardando
