@@ -108,7 +108,7 @@ class ClickAccessibilityService : AccessibilityService() {
         }
         // A validacao vem depois da troca de app porque as dimensoes e a
         // orientacao usadas nela precisam ser as do app alvo, e nao as da
-        // interface de automacao, que e sempre retrato.
+        // interface de automacao, que e sempre paisagem.
         val screen = screenSize()
         when (val load = SessionValidator.load(sessions, templates::sizeOf, screen)) {
             is SessionLoad.Failure -> {
