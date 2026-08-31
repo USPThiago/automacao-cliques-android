@@ -73,9 +73,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Inicia o roteiro e manda o app para segundo plano, revelando o app que
-     * estava atras. O servico espera o primeiro plano deixar de ser este app
-     * antes da primeira captura.
+     * Inicia o roteiro. A troca para o app alvo e feita pelo usuario: o servico
+     * espera o primeiro plano deixar de ser este app antes da primeira captura.
      */
     private fun start() {
         val service = ClickAccessibilityService.instance
@@ -88,7 +87,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
         toast(R.string.execution_started)
-        moveTaskToBack(true)
     }
 
     private fun stop() {

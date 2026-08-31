@@ -141,9 +141,9 @@ A tela do app e apenas o painel de controle (retrato fixo):
 
 - status do servico e atalho para as configuracoes de acessibilidade;
 - caminhos de `templates/` e `sessions/`;
-- **Iniciar** (valida a carga, manda o app para segundo plano com
-  `moveTaskToBack(true)` e espera ate 15 s o app alvo voltar ao primeiro plano
-  antes da primeira captura), **Parar**, **Limpar** e **Copiar**;
+- **Iniciar** (valida a carga e espera ate 15 s o app alvo chegar ao primeiro
+  plano antes da primeira captura; a troca de app e feita pelo usuario),
+  **Parar**, **Limpar** e **Copiar**;
 - caixa de log com as ultimas 500 linhas, mantida pelo servico (sobrevive ao
   fechamento da tela) e espelhada no Logcat com a tag `ClickService`.
 

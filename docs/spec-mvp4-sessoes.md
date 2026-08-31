@@ -208,10 +208,10 @@ Notas:
 forma de interromper sem desligar o serviço — e o botão fica visível assim que você volta ao
 app. Sem notificação persistente nesta etapa.
 
-Ao tocar em **Iniciar**: valida a carga, chama `moveTaskToBack(true)` (revela o app que estava
-atrás) e espera o foreground deixar de ser este app antes da primeira captura. Limitação do
-Android: nenhum app pode trazer outro app arbitrário ao primeiro plano; se o jogo tiver sido
-descarregado da memória, quem aparece é a tela inicial.
+Ao tocar em **Iniciar**: valida a carga e espera o foreground deixar de ser este app antes da
+primeira captura. A troca para o app alvo é feita pelo usuário; o app não se manda para
+segundo plano. Limitação do Android: nenhum app pode trazer outro app arbitrário ao primeiro
+plano.
 
 ### 5.2 Caixa de log
 

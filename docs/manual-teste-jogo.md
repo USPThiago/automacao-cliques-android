@@ -262,8 +262,8 @@ Escreva uma sessão mínima com uma única ação, sem `call`, e rode (seção 5
 }
 ```
 
-Deixe o jogo na tela correspondente, toque em **Iniciar** e volte ao app: a caixa de log
-mostra o que aconteceu.
+Deixe o jogo na tela correspondente, toque em **Iniciar**, troque para o jogo e depois volte
+ao app: a caixa de log mostra o que aconteceu.
 
 ```text
 Sessao: teste do recorte
@@ -361,9 +361,9 @@ adb shell cp /data/local/tmp/mainSession.json \
 
 1. Abra o jogo e deixe-o na tela inicial do roteiro.
 2. Abra o app de automação (o jogo fica atrás, em segundo plano).
-3. Toque em **Iniciar**: o app vai para segundo plano, espera o jogo voltar ao primeiro
-   plano (até 15 s), valida a carga já com a tela do jogo (`Carga inicial: OK`) e só então
-   faz a primeira captura. A validação vem depois da troca de app porque as áreas são
+3. Toque em **Iniciar** e troque para o jogo você mesmo (recentes, ícone ou gesto): o
+   serviço espera o jogo chegar ao primeiro plano (até 15 s), valida a carga já com a tela
+   do jogo (`Carga inicial: OK`) e só então faz a primeira captura. A validação vem depois da troca de app porque as áreas são
    conferidas contra a orientação do jogo, não contra o retrato do app de automação.
 4. Para acompanhar ou interromper, volte ao app: a caixa de log mostra tudo que aconteceu e
    o botão **Parar** cancela a execução. **Limpar** esvazia o log e **Copiar** joga as
@@ -401,8 +401,8 @@ encontrado em templates/`.
 ### Limitações que você vai encontrar (são reais, não bugs)
 
 - **Trazer o jogo de volta**: nenhum app pode colocar outro app arbitrário em primeiro
-  plano. O app só sai da frente (`moveTaskToBack`); se o jogo tiver sido descarregado da
-  memória, quem aparece é a tela inicial e a execução falha com
+  plano, e o app de automação também não sai da frente sozinho: depois de **Iniciar** é você
+  quem troca para o jogo. Se isso não acontecer em 15 s, a execução falha com
   `Transicao NOK - app em primeiro plano`.
 - **Custo**: cada ação custa de centenas de milissegundos a alguns segundos numa tela
   1080x2400, dependendo da `searchArea`.
@@ -422,7 +422,7 @@ encontrado em templates/`.
 | `Carga inicial: NOK - <arquivo>: campo '...'` | erro de digitação no JSON | corrija o campo indicado e reenvie |
 | `Carga inicial: NOK - ...: template 'x' nao encontrado em templates/` | nome/extensão diferente ou arquivo ausente | confira com `adb shell ls` (seção 4.5) |
 | `Acao ...: nao localizada (melhor escore=0.4..., limite=0.80)` | recorte com área animada, tela errada, ou jogo em outra resolução | recorte menor e centrado no ícone estável; refaça a captura no próprio aparelho |
-| `Transicao NOK - app em primeiro plano` | o jogo não voltou ao primeiro plano em 15 s | abra o jogo antes de tocar em Iniciar; evite que ele seja descarregado da memória |
+| `Transicao NOK - app em primeiro plano` | o jogo não chegou ao primeiro plano em 15 s | depois de tocar em Iniciar, troque para o jogo dentro dos 15 s; evite que ele seja descarregado da memória |
 | `Transicao NOK - captura falhou (codigo=...)` | jogo com bloqueio de captura (`FLAG_SECURE`) | nada a fazer no app se o conteúdo for protegido |
 | `Captura de tela exige Android 11 (API 30)` | aparelho antigo | o app não funciona nesse aparelho |
 | `Sessao x: nenhuma acao localizada em N tentativa(s) - encerrado` | a tela esperada não apareceu | aumente `retries`/`retryDelayMs` ou revise os templates da sessão |
