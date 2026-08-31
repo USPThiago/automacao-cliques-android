@@ -148,13 +148,13 @@ enquanto verdadeiro:
     repetir:
         log "Sessao <nome>", "Tentativa <n>"
         captura := capturaTela()                  # a cada tentativa, sempre
-        log "Tempo captura <ms>"
+        log "Tempo captura <ms>", "Resolucao da tela <largura>x<altura>"
         para cada acao em sessao.actions:         # ordem do arquivo
             log "Acao <nome>"
             resultado := localiza(captura, acao)  # dentro de searchArea, escalas da acao
             log "Tempo localizacao <ms>"
             se localizado:
-                log "Posicao inicial/final", "Escala <fator>"
+                log "Posicao left=..,top=..,right=..,bottom=..", "Escala <fator>"
                 para cada clique: despacha; log "Clique x=..,y=.."; espera intervalo
                 espera acao.waitAfterMs
                 log "Transicao OK" (ou o motivo da falha)
@@ -232,8 +232,8 @@ Linhas previstas (rótulo + valor):
 | `Escala` | fator aplicado às coordenadas (ex.: `1.000`, `0.900 (1080x2400 -> 972x2160)`) |
 | `Tempo captura` | ms entre o pedido e a resposta da captura |
 | `Tempo localizacao` | ms entre o início da busca e o resultado localizado/não localizado |
-| `Posicao inicial` | `x=..,y=..` do canto superior esquerdo da imagem localizada |
-| `Posicao final` | `x=..,y=..` do canto inferior direito |
+| `Resolucao da tela` | `<largura>x<altura>` reais do aparelho, medidos na captura (registrado quando muda) |
+| `Posicao` | `left=..,top=..,right=..,bottom=..` da imagem localizada (`right`/`bottom` exclusivos) |
 | `Clique` | `x=..,y=..` de cada clique despachado |
 | `Transicao` | `OK` ou mensagem de falha (§4.3) |
 | `Tempo acao` | ms entre o início e o fim do processamento da ação |

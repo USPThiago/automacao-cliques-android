@@ -269,11 +269,11 @@ ao app: a caixa de log mostra o que aconteceu.
 Sessao: teste do recorte
 Tentativa: 1 de 1
 Tempo captura: 412 ms
+Resolucao da tela: 1080x2400
 Acao: achar loja
 Tempo localizacao: 630 ms
 Escala: 1.000 (sem referencia)
-Posicao inicial: x=727,y=1381
-Posicao final: x=897,y=1552
+Posicao: left=727,top=1381,right=897,bottom=1552
 Clique: x=812,y=1466
 Transicao: OK
 ```

@@ -197,6 +197,31 @@ class SessionRunnerTest {
     }
 
     @Test
+    fun `log registra resolucao real posicao e cliques`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        val main = session(
+            "menu",
+            action("toque", "alvo_a", clicks = listOf(ClickPoint(10, 20), ClickPoint(30, 40)))
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
+        val lines = log.lines()
+        assertEquals(
+            1,
+            lines.count { it == "Resolucao da tela: ${screenSize.describe()}" }
+        )
+        assertTrue(lines.toString(), lines.contains("Posicao: left=0,top=0,right=32,bottom=32"))
+        assertEquals(
+            listOf("Clique: x=10,y=20", "Clique: x=30,y=40"),
+            lines.filter { it.startsWith("Clique: ") }
+        )
+    }
+
+    @Test
     fun `refaz a captura a cada retentativa ate localizar`() {
         val env = FakeEnv(
             captures = mutableListOf(
