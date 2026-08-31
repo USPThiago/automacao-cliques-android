@@ -58,6 +58,9 @@ class SessionRunner(
     @Volatile
     private var cancelled = false
 
+    /** Ultima resolucao registrada no log, para nao repetir a linha a cada captura. */
+    private var loggedScreen: Size? = null
+
     fun cancel() {
         cancelled = true
     }
@@ -144,6 +147,10 @@ class SessionRunner(
             return AttemptOutcome.NothingFound
         }
         val screen = (capture as Capture.Ok).image
+        if (loggedScreen != capture.size) {
+            log.add("Resolucao da tela", capture.size.describe())
+            loggedScreen = capture.size
+        }
         val scale = ScreenScale(real = capture.size, reference = session.screen)
 
         for (action in session.actions) {
@@ -154,8 +161,11 @@ class SessionRunner(
             val match = locate(screen, action, scale) ?: continue
 
             log.add("Escala", scale.describe())
-            log.add("Posicao inicial", "x=${match.left},y=${match.top}")
-            log.add("Posicao final", "x=${match.left + match.width},y=${match.top + match.height}")
+            log.add(
+                "Posicao",
+                "left=${match.left},top=${match.top}," +
+                    "right=${match.left + match.width},bottom=${match.top + match.height}"
+            )
 
             val clickOutcome = dispatchClicks(action, match, scale)
             if (clickOutcome != null) {
