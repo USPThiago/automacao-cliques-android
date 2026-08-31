@@ -361,10 +361,10 @@ adb shell cp /data/local/tmp/mainSession.json \
 
 1. Abra o jogo e deixe-o na tela inicial do roteiro.
 2. Abra o app de automação (o jogo fica atrás, em segundo plano).
-3. Toque em **Iniciar** e troque para o jogo você mesmo (recentes, ícone ou gesto): o
-   serviço espera o jogo chegar ao primeiro plano (até 15 s), valida a carga já com a tela
-   do jogo (`Carga inicial: OK`) e só então faz a primeira captura. A validação vem depois da troca de app porque as áreas são
-   conferidas contra a orientação do jogo, não contra o retrato do app de automação.
+3. Toque em **Iniciar**: o app vai para segundo plano, espera o jogo voltar ao primeiro
+   plano (até 15 s), valida a carga já com a tela do jogo (`Carga inicial: OK`) e só então
+   faz a primeira captura. A validação vem depois da troca de app porque as áreas são
+   conferidas contra a orientação do jogo, não contra a paisagem do app de automação.
 4. Para acompanhar ou interromper, volte ao app: a caixa de log mostra tudo que aconteceu e
    o botão **Parar** cancela a execução. **Limpar** esvazia o log e **Copiar** joga as
    linhas na área de transferência.

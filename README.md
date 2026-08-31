@@ -137,7 +137,7 @@ clique; qualquer falha impede o inicio e o log indica o arquivo e o campo:
 
 ## Interface
 
-A tela do app e apenas o painel de controle (retrato fixo):
+A tela do app e apenas o painel de controle (paisagem fixa):
 
 - status do servico e atalho para as configuracoes de acessibilidade;
 - caminhos de `templates/` e `sessions/`;
