@@ -37,6 +37,9 @@ object SessionValidator {
     fun fileNameOf(name: String): String =
         if (name.endsWith(EXTENSION, ignoreCase = true)) name else "$name$EXTENSION"
 
+    /** Arquivo a carregar e de onde ele foi chamado, para localizar o erro. */
+    private data class Pending(val fileName: String, val calledFrom: String? = null)
+
     fun load(
         source: SessionSource,
         templates: TemplateSizes,
@@ -44,14 +47,17 @@ object SessionValidator {
         mainFileName: String = MAIN_SESSION
     ): SessionLoad {
         val loaded = LinkedHashMap<String, Session>()
-        val pending = ArrayDeque(listOf(mainFileName))
+        val pending = ArrayDeque(listOf(Pending(mainFileName)))
 
         while (pending.isNotEmpty()) {
-            val fileName = pending.removeFirst()
+            val (fileName, calledFrom) = pending.removeFirst()
             if (loaded.containsKey(fileName)) continue
 
             val text = source.read(fileName)
-                ?: return SessionLoad.Failure("$fileName nao encontrado ou ilegivel")
+                ?: return SessionLoad.Failure(
+                    "$fileName nao encontrado ou ilegivel" +
+                        (calledFrom?.let { " (chamado em $it)" } ?: "")
+                )
             val session = try {
                 SessionParser.parse(fileName, text)
             } catch (e: SessionFormatException) {
@@ -60,7 +66,15 @@ object SessionValidator {
             validateActions(session, templates, screen)?.let { return SessionLoad.Failure(it) }
 
             loaded[fileName] = session
-            session.actions.mapNotNull { it.call }.forEach { pending.addLast(fileNameOf(it)) }
+            session.actions.forEach { action ->
+                val call = action.call ?: return@forEach
+                pending.addLast(
+                    Pending(
+                        fileName = fileNameOf(call),
+                        calledFrom = "${locationOf(session, action)}, campo 'call'"
+                    )
+                )
+            }
         }
 
         val main = loaded[mainFileName]
@@ -76,7 +90,7 @@ object SessionValidator {
     ): String? {
         val scale = ScreenScale(real = screen, reference = session.screen)
         for (action in session.actions) {
-            val label = "${session.fileName}: acao '${action.name}'"
+            val label = "${locationOf(session, action)}: acao '${action.name}'"
             val templateSize = templates.sizeOf(action.locate)
                 ?: return "$label: template '${action.locate}' nao encontrado em templates/"
 
@@ -98,4 +112,8 @@ object SessionValidator {
         }
         return null
     }
+
+    /** `arquivo.json:12` quando a linha e conhecida, senao apenas o arquivo. */
+    private fun locationOf(session: Session, action: SessionAction): String =
+        action.sourceLine?.let { "${session.fileName}:$it" } ?: session.fileName
 }

@@ -139,6 +139,17 @@ Ao abrir o app (e ao tocar em Iniciar), **DEVE** validar tudo e registrar
 
 Falha em qualquer item **DEVE** impedir o início da execução e nomear o arquivo e o campo.
 
+O motivo **DEVE** localizar o problema no texto do arquivo, no formato
+`arquivo.json:<linha>[:<coluna>]: campo '<caminho>': <motivo> (recebido: <valor>)`, com o
+caminho completo do campo (`actions[2].clicks[1].x`) e o valor recebido quando existir.
+Exemplos:
+
+```text
+mainSession.json:7:24: campo 'actions[0].threshold': fora da faixa 0.0-1.0 (recebido: numero 1.5)
+mainSession.json:4:5: campo 'actions[0].locate': campo obrigatorio ausente
+mainSession.json:3:1: JSON invalido na linha 3, coluna 1 (posicao 42): objeto nao fechado
+```
+
 ### 4.2 Laço de execução
 
 ```text

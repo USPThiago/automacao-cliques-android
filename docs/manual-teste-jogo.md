@@ -386,8 +386,17 @@ Antes de começar, o app confere tudo e recusa a execução com o arquivo e o ca
 O grafo validado é o que roda: editar os arquivos de `sessions/` durante a execução não
 muda o roteiro em andamento (recomece para valer a alteração).
 
-Exemplo de recusa: `Carga inicial: NOK - menu.json: acao 'abrir loja': template 'loja' nao
-encontrado em templates/`.
+Exemplos de recusa:
+
+```text
+Carga inicial: NOK - menu.json:12: acao 'abrir loja': template 'loja' nao encontrado em templates/
+Carga inicial: NOK - menu.json:7:20: campo 'actions[0].threshold': fora da faixa 0.0-1.0 (recebido: numero 1.5)
+Carga inicial: NOK - menu.json:9:25: campo 'actions[0].clicks[1].y': esperado um numero inteiro (recebido: numero 40.5)
+Carga inicial: NOK - loja.json nao encontrado ou ilegivel (chamado em menu.json:12, campo 'call')
+```
+
+O trecho `arquivo.json:<linha>:<coluna>` indica onde abrir o arquivo; em seguida vem o caminho
+completo do campo e o valor recebido.
 
 ### 5.4 Desempenho
 
@@ -419,7 +428,8 @@ encontrado em templates/`.
 | Sintoma no log | Causa provável | O que fazer |
 | --- | --- | --- |
 | `Carga inicial: NOK - mainSession.json nao encontrado ou ilegivel` | arquivo ausente na pasta `sessions/` | envie o arquivo (seção 5.1) |
-| `Carga inicial: NOK - <arquivo>: campo '...'` | erro de digitação no JSON | corrija o campo indicado e reenvie |
+| `Carga inicial: NOK - <arquivo>:<linha>:<coluna>: campo '...'` | erro de digitação no JSON | abra o arquivo na linha indicada e corrija o campo/valor citado |
+| `Carga inicial: NOK - <arquivo>:<linha>:<coluna>: JSON invalido ...` | vírgula, chave ou aspas faltando | corrija a sintaxe na linha/coluna indicada |
 | `Carga inicial: NOK - ...: template 'x' nao encontrado em templates/` | nome/extensão diferente ou arquivo ausente | confira com `adb shell ls` (seção 4.5) |
 | `Acao ...: nao localizada (melhor escore=0.4..., limite=0.80)` | recorte com área animada, tela errada, ou jogo em outra resolução | recorte menor e centrado no ícone estável; refaça a captura no próprio aparelho |
 | `Transicao NOK - app em primeiro plano` | o jogo não voltou ao primeiro plano em 15 s | abra o jogo antes de tocar em Iniciar; evite que ele seja descarregado da memória |
