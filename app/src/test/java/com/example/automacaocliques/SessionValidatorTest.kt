@@ -70,7 +70,7 @@ class SessionValidatorTest {
     }
 
     @Test
-    fun `recusa call para sessao inexistente`() {
+    fun `recusa call para sessao inexistente citando quem chamou`() {
         val reason = reasonOf(
             load(
                 mapOf(
@@ -81,7 +81,11 @@ class SessionValidatorTest {
                 )
             )
         )
-        assertTrue(reason, reason.contains("sumida.json"))
+        assertEquals(
+            "sumida.json nao encontrado ou ilegivel " +
+                "(chamado em mainSession.json:2, campo 'call')",
+            reason
+        )
     }
 
     @Test
@@ -96,6 +100,7 @@ class SessionValidatorTest {
             )
         )
         assertTrue(reason, reason.contains("fantasma"))
+        assertTrue(reason, reason.startsWith("mainSession.json:1:"))
     }
 
     @Test

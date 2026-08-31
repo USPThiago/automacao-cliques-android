@@ -37,7 +37,9 @@ data class SessionAction(
     val clicks: List<ClickPoint> = emptyList(),
     val clickIntervalMs: Long = DEFAULT_CLICK_INTERVAL_MS,
     val waitAfterMs: Long = DEFAULT_WAIT_AFTER_MS,
-    val call: String? = null
+    val call: String? = null,
+    /** Linha do arquivo onde a acao comeca, usada nas mensagens de erro. */
+    val sourceLine: Int? = null
 ) {
     companion object {
         const val DEFAULT_CLICK_INTERVAL_MS = 300L

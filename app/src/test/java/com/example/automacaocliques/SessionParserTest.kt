@@ -81,9 +81,131 @@ class SessionParserTest {
     }
 
     @Test
-    fun `recusa json invalido apontando o arquivo`() {
-        val error = fails("mainSession.json", "{ \"name\": ")
-        assertTrue(error, error.startsWith("mainSession.json:"))
+    fun `recusa json invalido apontando arquivo linha e coluna`() {
+        val error = fails(
+            "mainSession.json",
+            """
+            {
+              "name": "menu",
+              "actions": [
+            """.trimIndent()
+        )
+        assertTrue(error, error.startsWith("mainSession.json:3:14:"))
+        assertTrue(error, error.contains("linha 3, coluna 14"))
+        assertTrue(error, error.contains("posicao "))
+        assertTrue(error, error.contains("lista nao fechada"))
+    }
+
+    @Test
+    fun `aponta a linha do valor invalido dentro de uma acao`() {
+        val error = fails(
+            "mainSession.json",
+            """
+            {
+              "name": "menu",
+              "actions": [
+                {
+                  "name": "jogar",
+                  "locate": "botao",
+                  "threshold": 1.5
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertEquals(
+            "mainSession.json:7:20: campo 'actions[0].threshold': " +
+                "fora da faixa 0.0-1.0 (recebido: numero 1.5)",
+            error
+        )
+    }
+
+    @Test
+    fun `aponta a linha e o valor de um campo com tipo errado`() {
+        val error = fails(
+            "mainSession.json",
+            """
+            {
+              "name": "menu",
+              "actions": [
+                { "name": "jogar", "locate": true }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertEquals(
+            "mainSession.json:4:34: campo 'actions[0].locate': " +
+                "esperado um texto (recebido: booleano true)",
+            error
+        )
+    }
+
+    @Test
+    fun `aponta a linha do objeto quando o campo obrigatorio esta ausente`() {
+        val error = fails(
+            "mainSession.json",
+            """
+            {
+              "name": "menu",
+              "actions": [
+                { "name": "jogar" }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertEquals(
+            "mainSession.json:4:5: campo 'actions[0].locate': campo obrigatorio ausente",
+            error
+        )
+    }
+
+    @Test
+    fun `aponta o indice do clique e a coordenada culpada`() {
+        val error = fails(
+            "mainSession.json",
+            """
+            {
+              "name": "menu",
+              "actions": [
+                {
+                  "name": "jogar",
+                  "locate": "botao",
+                  "clicks": [
+                    { "x": 10, "y": 20 },
+                    { "x": 30, "y": 40.5 }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+        assertEquals(
+            "mainSession.json:9:25: campo 'actions[0].clicks[1].y': " +
+                "esperado um numero inteiro (recebido: numero 40.5)",
+            error
+        )
+    }
+
+    @Test
+    fun `expoe a linha e o campo na excecao`() {
+        val error = try {
+            SessionParser.parse(
+                "mainSession.json",
+                """
+                {
+                  "name": "menu",
+                  "retries": -2,
+                  "actions": [ { "name": "a", "locate": "t" } ]
+                }
+                """.trimIndent()
+            )
+            throw AssertionError("esperado SessionFormatException")
+        } catch (e: SessionFormatException) {
+            e
+        }
+
+        assertEquals(3, error.line)
+        assertEquals("retries", error.field)
     }
 
     @Test
@@ -117,6 +239,7 @@ class SessionParserTest {
             """{ "name": "m", "actions": [ { "name": "a", "locate": "t", "threshold": 1.5 } ] }"""
         )
         assertTrue(error, error.contains("threshold"))
+        assertTrue(error, error.contains("recebido: numero 1.5"))
     }
 
     @Test
@@ -154,6 +277,7 @@ class SessionParserTest {
         ).forEach { (text, field) ->
             val error = fails("mainSession.json", text.trimIndent())
             assertTrue("$field: $error", error.contains(field))
+            assertTrue("$field: $error", error.contains("recebido: numero -0.5"))
         }
     }
 
@@ -170,7 +294,7 @@ class SessionParserTest {
     }
 
     @Test
-    fun `recusa searchArea invertida`() {
+    fun `recusa searchArea invertida citando os dois valores`() {
         val error = fails(
             "mainSession.json",
             """
@@ -178,7 +302,11 @@ class SessionParserTest {
               "searchArea": { "left": 300, "top": 0, "right": 100, "bottom": 50 } } ] }
             """.trimIndent()
         )
-        assertTrue(error, error.contains("searchArea"))
+        assertEquals(
+            "mainSession.json:2:51: campo 'actions[0].searchArea.right': " +
+                "right (100) deve ser maior que left (300) (recebido: numero 100)",
+            error
+        )
     }
 
     @Test
