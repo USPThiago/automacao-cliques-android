@@ -49,6 +49,12 @@ class ClickAccessibilityService : AccessibilityService() {
 
     private val running = AtomicBoolean(false)
 
+    /**
+     * Pedido de parada valido durante toda a execucao, inclusive antes de o
+     * [SessionRunner] existir: Parar logo depois de Iniciar tem de valer.
+     */
+    private val stopRequested = AtomicBoolean(false)
+
     @Volatile
     private var runner: SessionRunner? = null
 
@@ -72,6 +78,7 @@ class ClickAccessibilityService : AccessibilityService() {
             log.add("Execucao", "ja existe uma execucao em andamento")
             return false
         }
+        stopRequested.set(false)
         templates.invalidate()
         runnerExecutor.execute {
             try {
@@ -86,10 +93,22 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /** Cancela a execucao em andamento, se houver. */
     fun stop() {
+        stopRequested.set(true)
         runner?.cancel()
     }
 
     private fun execute() {
+        if (!awaitForeignForeground()) {
+            if (stopRequested.get()) {
+                log.add("Execucao", "parada")
+            } else {
+                log.add("Transicao", "NOK - app em primeiro plano")
+            }
+            return
+        }
+        // A validacao vem depois da troca de app porque as dimensoes e a
+        // orientacao usadas nela precisam ser as do app alvo, e nao as da
+        // interface de automacao, que e sempre retrato.
         val screen = screenSize()
         when (val load = SessionValidator.load(sessions, templates::sizeOf, screen)) {
             is SessionLoad.Failure -> {
@@ -98,13 +117,12 @@ class ClickAccessibilityService : AccessibilityService() {
             }
             is SessionLoad.Ok -> {
                 log.add("Carga inicial", "OK")
-                if (!awaitForeignForeground()) {
-                    log.add("Transicao", "NOK - app em primeiro plano")
-                    return
-                }
                 val sessionRunner = SessionRunner(ServiceEnvironment(), log)
                 runner = sessionRunner
-                when (val outcome = sessionRunner.run(load.main)) {
+                // Parada pedida enquanto o executor era criado ou durante a
+                // validacao: o cancelamento e transferido para ele.
+                if (stopRequested.get()) sessionRunner.cancel()
+                when (val outcome = sessionRunner.run(load.main, load.sessions)) {
                     RunOutcome.Success -> log.add("Execucao", "concluida com sucesso")
                     RunOutcome.Cancelled -> log.add("Execucao", "parada")
                     is RunOutcome.Failure -> log.add("Execucao", "encerrada: ${outcome.reason}")
@@ -120,10 +138,11 @@ class ClickAccessibilityService : AccessibilityService() {
     private fun awaitForeignForeground(timeoutMs: Long = FOREGROUND_TIMEOUT_MS): Boolean {
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (SystemClock.elapsedRealtime() < deadline) {
+            if (stopRequested.get()) return false
             if (!isOwnAppInForeground()) return true
             SystemClock.sleep(FOREGROUND_POLL_MS)
         }
-        return !isOwnAppInForeground()
+        return !stopRequested.get() && !isOwnAppInForeground()
     }
 
     private fun isOwnAppInForeground(): Boolean =
@@ -236,16 +255,6 @@ class ClickAccessibilityService : AccessibilityService() {
         }
 
         override fun templateOf(name: String): GrayImage? = templates.get(name)?.image
-
-        override fun loadSession(fileName: String): Session? {
-            val text = sessions.read(fileName) ?: return null
-            return try {
-                SessionParser.parse(fileName, text)
-            } catch (e: SessionFormatException) {
-                Log.w(TAG, e.message.orEmpty())
-                null
-            }
-        }
 
         override fun sleep(ms: Long) = SystemClock.sleep(ms)
 

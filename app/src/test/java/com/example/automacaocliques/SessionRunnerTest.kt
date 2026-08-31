@@ -50,8 +50,6 @@ class SessionRunnerTest {
 
         override fun templateOf(name: String): GrayImage? = templates[name]
 
-        override fun loadSession(fileName: String): Session? = sessions[fileName]
-
         override fun sleep(ms: Long) {
             sleeps += ms
             clock += ms
@@ -148,7 +146,7 @@ class SessionRunnerTest {
             action("segunda", "alvo_b")
         )
 
-        val outcome = SessionRunner(env, log).run(main)
+        val outcome = SessionRunner(env, log).run(main, env.sessions)
 
         assertEquals(RunOutcome.Success, outcome)
         assertEquals(1, env.clicks.size)
@@ -168,7 +166,7 @@ class SessionRunnerTest {
             action("segunda", "alvo_b")
         )
 
-        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main))
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
         assertEquals(80 to 112, env.clicks.single())
     }
 
@@ -193,7 +191,7 @@ class SessionRunnerTest {
             fileName = "menu.json"
         )
 
-        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main))
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
         assertEquals(listOf(20 to 40, 60 to 80), env.clicks)
         assertTrue("delayMs deveria prevalecer: ${env.sleeps}", env.sleeps.contains(5L))
     }
@@ -211,7 +209,7 @@ class SessionRunnerTest {
         )
         val main = session("menu", action("primeira", "alvo_a"), retries = 3)
 
-        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main))
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
         assertEquals(3, env.captureCount)
         assertEquals(1, env.clicks.size)
     }
@@ -225,7 +223,7 @@ class SessionRunnerTest {
         )
         val main = session("menu", action("primeira", "alvo_a"), retries = 2)
 
-        val outcome = SessionRunner(env, log).run(main)
+        val outcome = SessionRunner(env, log).run(main, env.sessions)
 
         assertTrue(outcome.toString(), outcome is RunOutcome.Failure)
         assertEquals(3, env.captureCount)
@@ -247,7 +245,7 @@ class SessionRunnerTest {
             sessions = mapOf("a.json" to sessionA, "b.json" to sessionB)
         )
 
-        val outcome = SessionRunner(env, log).run(sessionA)
+        val outcome = SessionRunner(env, log).run(sessionA, env.sessions)
 
         assertTrue(outcome.toString(), outcome is RunOutcome.Failure)
         assertEquals(4, env.captureCount)
@@ -263,7 +261,7 @@ class SessionRunnerTest {
         )
         assertEquals(
             RunOutcome.Success,
-            SessionRunner(env, log).run(session("menu", action("fim", "alvo_a")))
+            SessionRunner(env, log).run(session("menu", action("fim", "alvo_a")), env.sessions)
         )
     }
 
@@ -275,7 +273,7 @@ class SessionRunnerTest {
             sessions = emptyMap()
         )
         val outcome = SessionRunner(env, log)
-            .run(session("menu", action("vai", "alvo_a", call = "sumida")))
+            .run(session("menu", action("vai", "alvo_a", call = "sumida")), env.sessions)
 
         assertTrue(outcome.toString(), outcome is RunOutcome.Failure)
         assertTrue((outcome as RunOutcome.Failure).reason.contains("sumida"))
@@ -289,7 +287,8 @@ class SessionRunnerTest {
             sessions = emptyMap(),
             clickOutcome = { ClickOutcome.REJECTED }
         )
-        val outcome = SessionRunner(env, log).run(session("menu", action("vai", "alvo_a")))
+        val outcome = SessionRunner(env, log)
+            .run(session("menu", action("vai", "alvo_a")), env.sessions)
 
         assertTrue(outcome.toString(), outcome is RunOutcome.Failure)
         assertEquals("gesto rejeitado", (outcome as RunOutcome.Failure).reason)
@@ -303,7 +302,8 @@ class SessionRunnerTest {
             sessions = emptyMap()
         )
         val outcome = SessionRunner(env, log).run(
-            session("menu", action("vai", "alvo_a"), retries = 1)
+            session("menu", action("vai", "alvo_a"), retries = 1),
+            env.sessions
         )
 
         assertEquals(RunOutcome.Success, outcome)
@@ -320,8 +320,71 @@ class SessionRunnerTest {
         val runner = SessionRunner(env, log)
         env.onCapture = { runner.cancel() }
 
-        assertEquals(RunOutcome.Cancelled, runner.run(session("menu", action("vai", "alvo_a"), retries = 5)))
+        assertEquals(
+            RunOutcome.Cancelled,
+            runner.run(session("menu", action("vai", "alvo_a"), retries = 5), env.sessions)
+        )
         assertEquals(1, env.captureCount)
+    }
+
+    @Test
+    fun `parar antes de run impede qualquer captura`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        val runner = SessionRunner(env, log)
+        runner.cancel()
+
+        assertEquals(
+            RunOutcome.Cancelled,
+            runner.run(session("menu", action("vai", "alvo_a")), env.sessions)
+        )
+        assertEquals(0, env.captureCount)
+        assertTrue(env.clicks.isEmpty())
+    }
+
+    @Test
+    fun `transicao usa o grafo validado e ignora o armazenamento`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            // O armazenamento foi alterado depois da validacao: a sessao 'b'
+            // desapareceu, mas o snapshot validado continua valendo.
+            sessions = emptyMap()
+        )
+
+        val outcome = SessionRunner(env, log)
+            .run(sessionA, mapOf("a.json" to sessionA, "b.json" to sessionB))
+
+        assertEquals(RunOutcome.Success, outcome)
+        assertEquals(2, env.clicks.size)
+    }
+
+    @Test
+    fun `threshold alto nao para no early exit`() {
+        // Um template identico a regiao correspondente da tela: com o early exit
+        // limitado a 0.95 a busca poderia devolver um escore abaixo do exigido.
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_c")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        val main = session(
+            "menu",
+            SessionAction(
+                name = "exato",
+                locate = "alvo_c",
+                threshold = 0.999,
+                waitAfterMs = 0
+            )
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
+        assertEquals(128 to 192, env.clicks.single())
     }
 
     private companion object {

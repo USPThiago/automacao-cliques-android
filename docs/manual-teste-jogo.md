@@ -361,8 +361,10 @@ adb shell cp /data/local/tmp/mainSession.json \
 
 1. Abra o jogo e deixe-o na tela inicial do roteiro.
 2. Abra o app de automação (o jogo fica atrás, em segundo plano).
-3. Toque em **Iniciar**: o app valida a carga (`Carga inicial: OK`), vai para segundo plano
-   e espera o jogo voltar ao primeiro plano (até 15 s) antes da primeira captura.
+3. Toque em **Iniciar**: o app vai para segundo plano, espera o jogo voltar ao primeiro
+   plano (até 15 s), valida a carga já com a tela do jogo (`Carga inicial: OK`) e só então
+   faz a primeira captura. A validação vem depois da troca de app porque as áreas são
+   conferidas contra a orientação do jogo, não contra o retrato do app de automação.
 4. Para acompanhar ou interromper, volte ao app: a caixa de log mostra tudo que aconteceu e
    o botão **Parar** cancela a execução. **Limpar** esvazia o log e **Copiar** joga as
    linhas na área de transferência.
@@ -379,7 +381,10 @@ Antes de começar, o app confere tudo e recusa a execução com o arquivo e o ca
 - todo `locate` tem imagem correspondente em `templates/`;
 - `searchArea` tem os quatro campos, `right > left`, `bottom > top` e cabe na tela;
 - o template cabe na `searchArea` depois do escalonamento;
-- `threshold` entre 0.0 e 1.0; tempos e `retries` não negativos.
+- `threshold` entre 0.0 e 1.0; tempos e `retries` não negativos e sem frações.
+
+O grafo validado é o que roda: editar os arquivos de `sessions/` durante a execução não
+muda o roteiro em andamento (recomece para valer a alteração).
 
 Exemplo de recusa: `Carga inicial: NOK - menu.json: acao 'abrir loja': template 'loja' nao
 encontrado em templates/`.
@@ -389,7 +394,7 @@ encontrado em templates/`.
 - Cada tentativa faz **uma** captura, compartilhada por todas as ações daquela tentativa.
 - `searchArea` é o que mais economiza tempo: o casamento roda só sobre o recorte.
 - `scales` com um único valor (padrão) é ~7x mais rápido que a lista completa do MVP 3.5.
-- A busca para assim que encontra um escore ≥ 0.95.
+- A busca para assim que encontra um escore ≥ 0.95 (ou ≥ `threshold`, se ele for maior).
 - `Tempo captura`, `Tempo localizacao`, `Tempo acao` e `Tempo total` aparecem no log: use-os
   para ajustar `searchArea` e `scales`.
 
@@ -402,7 +407,9 @@ encontrado em templates/`.
 - **Custo**: cada ação custa de centenas de milissegundos a alguns segundos numa tela
   1080x2400, dependendo da `searchArea`.
 - **Resolução**: o ideal é recortar no aparelho onde vai rodar; para reaproveitar recortes
-  de outro aparelho, declare `screen` e/ou acrescente escalas.
+  de outro aparelho, declare `screen` e/ou acrescente escalas. Se as proporções de `screen`
+  e da tela real diferirem, o template é redimensionado por um fator único (o menor dos
+  dois eixos), porque o casamento não sabe esticar em largura e altura separadamente.
 - **Jogo em outra orientação** (paisagem vs. retrato) exige recortes próprios.
 
 ---

@@ -1,5 +1,7 @@
 package com.example.automacaocliques
 
+import kotlin.math.floor
+
 /** Erro de conteudo do arquivo de sessao, com o arquivo e o campo culpados. */
 class SessionFormatException(message: String) : Exception(message)
 
@@ -121,7 +123,7 @@ object SessionParser {
                 y = requireInt(fileName, point, "y", label),
                 delayMs = when (val delay = point.entries["delayMs"]) {
                     null -> null
-                    is JsonValue.Num -> delay.value.toLong().also {
+                    is JsonValue.Num -> whole(fileName, "$label.delayMs", delay.value).also {
                         if (it < 0) fail(fileName, "$label.delayMs", "deve ser >= 0")
                     }
                     else -> fail(fileName, "$label.delayMs", "esperado um numero")
@@ -177,7 +179,7 @@ object SessionParser {
     ): Int {
         val value = obj.entries[field] as? JsonValue.Num
             ?: fail(fileName, "$label.$field", "campo obrigatorio ausente ou nao numerico")
-        return value.value.toInt()
+        return whole(fileName, "$label.$field", value.value).toInt()
     }
 
     private fun optionalInt(
@@ -190,7 +192,7 @@ object SessionParser {
         val value = obj.entries[field] ?: return default
         val number = (value as? JsonValue.Num)?.value
             ?: fail(fileName, field, "esperado um numero")
-        val result = number.toInt()
+        val result = whole(fileName, field, number).toInt()
         if (result < minimum) fail(fileName, field, "deve ser >= $minimum")
         return result
     }
@@ -205,9 +207,22 @@ object SessionParser {
         val value = obj.entries[field] ?: return default
         val number = (value as? JsonValue.Num)?.value
             ?: fail(fileName, label, "esperado um numero de milissegundos")
-        val result = number.toLong()
+        val result = whole(fileName, label, number)
         if (result < 0) fail(fileName, label, "deve ser >= 0")
         return result
+    }
+
+    /**
+     * Converte para inteiro recusando fracoes: truncar aceitaria silenciosamente
+     * coisas como `-0.5` (que virava 0) e coordenadas quebradas.
+     */
+    private fun whole(fileName: String, label: String, number: Double): Long {
+        if (number.isNaN() || number != floor(number) ||
+            number < Long.MIN_VALUE.toDouble() || number > Long.MAX_VALUE.toDouble()
+        ) {
+            fail(fileName, label, "esperado um numero inteiro: $number")
+        }
+        return number.toLong()
     }
 
     private fun fail(fileName: String, field: String, reason: String): Nothing =

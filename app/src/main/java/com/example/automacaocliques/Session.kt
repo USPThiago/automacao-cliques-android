@@ -73,6 +73,13 @@ class ScreenScale(val real: Size, val reference: Size?) {
     val factorX: Double = reference?.let { real.width.toDouble() / it.width } ?: 1.0
     val factorY: Double = reference?.let { real.height.toDouble() / it.height } ?: 1.0
 
+    /**
+     * Fator unico aplicado aos templates. O casamento so sabe redimensionar de
+     * forma uniforme, entao, quando as proporcoes de [reference] e [real]
+     * diferem, vale o menor dos dois eixos: e a escala que ainda cabe na tela.
+     */
+    val templateFactor: Double = minOf(factorX, factorY)
+
     fun scaleX(value: Int): Int = (value * factorX).roundToInt()
 
     fun scaleY(value: Int): Int = (value * factorY).roundToInt()
@@ -85,7 +92,10 @@ class ScreenScale(val real: Size, val reference: Size?) {
     )
 
     /** Tamanho de um template apos a escala; usado para saber se ele cabe. */
-    fun scale(size: Size): Size = Size(scaleX(size.width), scaleY(size.height))
+    fun scale(size: Size): Size = Size(
+        (size.width * templateFactor).roundToInt(),
+        (size.height * templateFactor).roundToInt()
+    )
 
     /** Valor da linha `Escala` do log. */
     fun describe(): String {
