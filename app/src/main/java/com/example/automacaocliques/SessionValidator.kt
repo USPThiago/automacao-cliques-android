@@ -88,8 +88,9 @@ object SessionValidator {
             }
 
             val smallestScale = action.scales.min()
-            val width = (templateSize.width * scale.factorX * smallestScale).roundToInt()
-            val height = (templateSize.height * scale.factorY * smallestScale).roundToInt()
+            val factor = scale.templateFactor * smallestScale
+            val width = (templateSize.width * factor).roundToInt()
+            val height = (templateSize.height * factor).roundToInt()
             if (width > area.width || height > area.height) {
                 return "$label: template '${action.locate}' (${width}x$height apos escala) " +
                     "nao cabe na area ${area.describe()}"

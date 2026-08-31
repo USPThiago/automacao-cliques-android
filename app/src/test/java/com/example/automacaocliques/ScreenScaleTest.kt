@@ -26,6 +26,19 @@ class ScreenScaleTest {
     }
 
     @Test
+    fun `template usa um fator unico quando as proporcoes diferem`() {
+        val scale = ScreenScale(real = Size(1080, 2160), reference = Size(540, 1200))
+        assertEquals(2.0, scale.factorX, 1e-9)
+        assertEquals(1.8, scale.factorY, 1e-9)
+        // O casamento so redimensiona de forma uniforme: vale o menor fator.
+        assertEquals(1.8, scale.templateFactor, 1e-9)
+        assertEquals(Size(180, 90), scale.scale(Size(100, 50)))
+        // As coordenadas continuam seguindo cada eixo.
+        assertEquals(200, scale.scaleX(100))
+        assertEquals(90, scale.scaleY(50))
+    }
+
+    @Test
     fun `arredonda pelo vizinho mais proximo`() {
         val scale = ScreenScale(real = Size(1080, 2400), reference = Size(720, 1600))
         assertEquals(15, scale.scaleX(10))

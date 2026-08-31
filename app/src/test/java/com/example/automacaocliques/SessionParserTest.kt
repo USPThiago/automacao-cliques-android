@@ -138,6 +138,38 @@ class SessionParserTest {
     }
 
     @Test
+    fun `recusa tempos negativos fracionarios`() {
+        // -0.5 truncava para 0 e passava pela faixa "deve ser >= 0".
+        listOf(
+            """{ "name": "m", "retryDelayMs": -0.5, "actions": [ { "name": "a", "locate": "t" } ] }"""
+                to "retryDelayMs",
+            """{ "name": "m", "actions": [ { "name": "a", "locate": "t",
+                 "clickIntervalMs": -0.5 } ] }""" to "clickIntervalMs",
+            """{ "name": "m", "actions": [ { "name": "a", "locate": "t",
+                 "waitAfterMs": -0.5 } ] }""" to "waitAfterMs",
+            """{ "name": "m", "retries": -0.5, "actions": [ { "name": "a", "locate": "t" } ] }"""
+                to "retries",
+            """{ "name": "m", "actions": [ { "name": "a", "locate": "t",
+                 "clicks": [ { "x": 1, "y": 2, "delayMs": -0.5 } ] } ] }""" to "delayMs"
+        ).forEach { (text, field) ->
+            val error = fails("mainSession.json", text.trimIndent())
+            assertTrue("$field: $error", error.contains(field))
+        }
+    }
+
+    @Test
+    fun `recusa fracoes em campos inteiros`() {
+        val error = fails(
+            "mainSession.json",
+            """
+            { "name": "m", "actions": [ { "name": "a", "locate": "t",
+              "clicks": [ { "x": 10.5, "y": 20 } ] } ] }
+            """.trimIndent()
+        )
+        assertTrue(error, error.contains("inteiro"))
+    }
+
+    @Test
     fun `recusa searchArea invertida`() {
         val error = fails(
             "mainSession.json",

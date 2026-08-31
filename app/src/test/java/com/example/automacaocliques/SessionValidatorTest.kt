@@ -144,6 +144,37 @@ class SessionValidatorTest {
     }
 
     @Test
+    fun `usa o fator unico do template quando as proporcoes diferem`() {
+        // 540x1200 -> 1080x2160: factorX 2.0, factorY 1.8. O template de 100x50
+        // e casado a 1.8 (fator unico), logo 180x90, e cabe na area 190x108.
+        val result = load(
+            mapOf(
+                "mainSession.json" to """
+                    { "name": "menu", "screen": { "width": 540, "height": 1200 },
+                      "actions": [ { "name": "a", "locate": "botao",
+                        "searchArea": { "left": 0, "top": 0, "right": 95, "bottom": 60 } } ] }
+                """.trimIndent()
+            ),
+            screen = Size(1080, 2160)
+        )
+        assertTrue(result.toString(), result is SessionLoad.Ok)
+    }
+
+    @Test
+    fun `valida areas contra a tela em paisagem`() {
+        val result = load(
+            mapOf(
+                "mainSession.json" to """
+                    { "name": "menu", "actions": [ { "name": "a", "locate": "botao",
+                      "searchArea": { "left": 0, "top": 0, "right": 2000, "bottom": 900 } } ] }
+                """.trimIndent()
+            ),
+            screen = Size(2400, 1080)
+        )
+        assertTrue(result.toString(), result is SessionLoad.Ok)
+    }
+
+    @Test
     fun `recusa searchArea que so estoura depois da escala`() {
         val reason = reasonOf(
             load(

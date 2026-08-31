@@ -38,9 +38,6 @@ interface RunnerEnvironment {
     /** Template [name] em tons de cinza, ou `null` se ausente. */
     fun templateOf(name: String): GrayImage?
 
-    /** Sessao do arquivo [fileName], ou `null` se ilegivel. */
-    fun loadSession(fileName: String): Session?
-
     fun sleep(ms: Long)
 
     /** Relogio monotonico, em milissegundos. */
@@ -65,8 +62,12 @@ class SessionRunner(
         cancelled = true
     }
 
-    fun run(main: Session): RunOutcome {
-        cancelled = false
+    /**
+     * Executa o grafo ja validado na carga inicial: [sessions] mapeia nome de
+     * arquivo para sessao e e a unica origem das transicoes, para que edicoes
+     * feitas no aparelho durante a execucao nao escapem da validacao.
+     */
+    fun run(main: Session, sessions: Map<String, Session> = emptyMap()): RunOutcome {
         var session = main
 
         while (true) {
@@ -85,7 +86,7 @@ class SessionRunner(
                         val call = outcome.call
                             ?: return RunOutcome.Success
                         val fileName = SessionValidator.fileNameOf(call)
-                        next = env.loadSession(fileName) ?: run {
+                        next = sessions[fileName] ?: run {
                             log.add("Transicao", "NOK - sessao $call ilegivel")
                             return RunOutcome.Failure("sessao $call ilegivel")
                         }
@@ -183,7 +184,7 @@ class SessionRunner(
         val screenSize = Size(screen.width, screen.height)
         val area = (action.searchArea?.let { scale.scale(it) } ?: Area(0, 0, screen.width, screen.height))
             .clipTo(screenSize)
-        val scales = action.scales.map { it * scale.factorX }
+        val scales = action.scales.map { it * scale.templateFactor }
         val smallest = scales.min()
         if (template.width * smallest > area.width || template.height * smallest > area.height) {
             log.add(
@@ -195,7 +196,13 @@ class SessionRunner(
         }
 
         val start = env.elapsedMs()
-        val match = TemplateMatcher.findBest(screen, template, scales, area)
+        val match = TemplateMatcher.findBest(
+            screen,
+            template,
+            scales,
+            area,
+            maxOf(TemplateMatcher.EARLY_EXIT_SCORE, action.threshold)
+        )
         val elapsed = env.elapsedMs() - start
         log.add("Tempo localizacao", "$elapsed ms")
 
