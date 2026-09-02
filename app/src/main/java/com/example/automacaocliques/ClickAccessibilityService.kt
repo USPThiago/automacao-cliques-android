@@ -33,13 +33,15 @@ class ClickAccessibilityService : AccessibilityService() {
      * Thread unica onde o roteiro roda: captura e casamento custam segundos e
      * travariam a interface (ANR) se rodassem na thread principal.
      */
-    private val runnerExecutor = Executors.newSingleThreadExecutor()
+    @Volatile
+    private var runnerExecutor = Executors.newSingleThreadExecutor()
 
     /**
      * Thread separada para as respostas de [takeScreenshot]: a thread do roteiro
      * fica bloqueada esperando a captura e nao pode receber o proprio callback.
      */
-    private val captureExecutor = Executors.newSingleThreadExecutor()
+    @Volatile
+    private var captureExecutor = Executors.newSingleThreadExecutor()
 
     /** Recortes usados no reconhecimento visual das telas. */
     val templates: TemplateStore by lazy { TemplateStore(this) }
@@ -60,6 +62,7 @@ class ClickAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        ensureExecutors()
         isRunning = true
         instance = this
         Log.i(TAG, "Servico conectado")
@@ -80,6 +83,7 @@ class ClickAccessibilityService : AccessibilityService() {
         }
         stopRequested.set(false)
         templates.invalidate()
+        ensureExecutors()
         runnerExecutor.execute {
             try {
                 execute()
@@ -147,6 +151,17 @@ class ClickAccessibilityService : AccessibilityService() {
 
     private fun isOwnAppInForeground(): Boolean =
         rootInActiveWindow?.packageName == packageName
+
+    private fun ensureExecutors() {
+        synchronized(this) {
+            if (runnerExecutor.isShutdown) {
+                runnerExecutor = Executors.newSingleThreadExecutor()
+            }
+            if (captureExecutor.isShutdown) {
+                captureExecutor = Executors.newSingleThreadExecutor()
+            }
+        }
+    }
 
     /** Resolucao real da tela, incluindo status bar e barra de navegacao. */
     fun screenSize(): Size {
@@ -270,8 +285,10 @@ class ClickAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: android.content.Intent?): Boolean {
         stop()
         mainHandler.removeCallbacksAndMessages(null)
-        runnerExecutor.shutdownNow()
-        captureExecutor.shutdownNow()
+        synchronized(this) {
+            runnerExecutor.shutdownNow()
+            captureExecutor.shutdownNow()
+        }
         isRunning = false
         instance = null
         Log.i(TAG, "Servico desconectado")
