@@ -22,8 +22,10 @@ class MainActivity : AppCompatActivity() {
     /** Leitura dos arquivos de sessao e templates fora da thread principal. */
     private val ioExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val pendingStartCheck = Runnable { startWhenServiceReady() }
 
     private val log = ClickAccessibilityService.log
+    private var pendingStart = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        pendingStart = false
         mainHandler.removeCallbacksAndMessages(null)
         ioExecutor.shutdownNow()
         super.onDestroy()
@@ -85,12 +88,16 @@ class MainActivity : AppCompatActivity() {
             toast(R.string.service_inactive_warning)
             return
         }
-        startWhenServiceReady(20)
+        if (pendingStart) return
+        pendingStart = true
+        startWhenServiceReady()
     }
 
-    private fun startWhenServiceReady(remainingAttempts: Int) {
+    private fun startWhenServiceReady() {
+        if (!pendingStart) return
         val service = ClickAccessibilityService.instance
         if (service != null) {
+            pendingStart = false
             if (!service.start()) {
                 toast(R.string.execution_already_running)
                 return
@@ -98,15 +105,18 @@ class MainActivity : AppCompatActivity() {
             toast(R.string.execution_started)
             return
         }
-        if (remainingAttempts == 0 || !AccessibilityUtils.isServiceEnabled(this)) {
+        if (!AccessibilityUtils.isServiceEnabled(this)) {
+            pendingStart = false
             toast(R.string.service_inactive_warning)
             updateStatus()
             return
         }
-        mainHandler.postDelayed({ startWhenServiceReady(remainingAttempts - 1) }, 100L)
+        mainHandler.postDelayed(pendingStartCheck, 100L)
     }
 
     private fun stop() {
+        pendingStart = false
+        mainHandler.removeCallbacks(pendingStartCheck)
         val service = ClickAccessibilityService.instance
         if (service == null) {
             toast(R.string.service_inactive_warning)
