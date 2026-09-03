@@ -297,9 +297,15 @@ class ClickAccessibilityService : AccessibilityService() {
             val latch = CountDownLatch(1)
             var choice = DebugChoice.CONTINUE
             mainHandler.post {
-                debugOverlay.show(step) {
-                    choice = it
+                // Parar pedido entre o ultimo clique e o popup: nao ha o que perguntar.
+                if (stopRequested.get()) {
+                    choice = DebugChoice.CANCEL
                     latch.countDown()
+                } else {
+                    debugOverlay.show(step) {
+                        choice = it
+                        latch.countDown()
+                    }
                 }
             }
             val answered = latch.await(DEBUG_TIMEOUT_MS, TimeUnit.MILLISECONDS)
