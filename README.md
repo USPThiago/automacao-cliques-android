@@ -29,10 +29,12 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
   termo (removido no MVP 4).
 - **MVP 3.5**: reconhecimento visual por captura de tela + template matching,
   para telas sem arvore de acessibilidade (jogos).
-- **MVP 4 (atual)**: roteiros declarados em sessoes JSON no aparelho, busca
+- **MVP 4**: roteiros declarados em sessoes JSON no aparelho, busca
   restrita por `searchArea` com escala unica e early exit, e interface
   intermediaria com log de execucao (Iniciar/Parar/Limpar/Copiar).
-- **MVP 5**: overlay flutuante (start/stop sem sair do app alvo) e edicao das
+- **MVP 5 (atual)**: modo debug com popup passo a passo, mostrando onde cada
+  acao localizou o template e onde clicou antes de seguir para a proxima sessao.
+- **Proximos**: overlay flutuante (start/stop sem sair do app alvo) e edicao das
   sessoes pela propria interface.
 
 Pendencias abertas e o que esta fora do escopo atual:
@@ -147,12 +149,39 @@ A tela do app e apenas o painel de controle (paisagem fixa):
 - **Iniciar** (valida a carga e espera ate 15 s o app alvo chegar ao primeiro
   plano antes da primeira captura; a troca de app e feita pelo usuario),
   **Parar**, **Limpar** e **Copiar**;
+- chave **Modo debug** (ver abaixo), persistida entre execucoes;
 - caixa de log com as ultimas 500 linhas, mantida pelo servico (sobrevive ao
   fechamento da tela) e espelhada no Logcat com a tag `ClickService`.
 
 Rotulos do log: `Carga inicial`, `Sessao`, `Tentativa`, `Acao`, `Escala`,
 `Tempo captura`, `Tempo localizacao`, `Posicao inicial`, `Posicao final`,
-`Clique`, `Transicao`, `Tempo acao`, `Tempo total`.
+`Clique`, `Transicao`, `Tempo acao`, `Tempo total`, `Debug`.
+
+## Modo debug
+
+Com a chave **Modo debug** ligada, cada acao que localiza o seu template mostra,
+**depois do ultimo clique** e **antes** de seguir para a sessao do `call`, um popup
+desenhado pelo proprio servico de acessibilidade por cima do app alvo (a tela do
+app esta em segundo plano durante a execucao). O popup traz:
+
+- `Sessao`, `Tentativa` (ex.: `2 de 3`) e `Acao` que localizou o template;
+- `Posicao inicial` (`left,top`) e `Posicao final` (`right,bottom`) do template na
+  tela real, ja escalonadas;
+- `Clique`: as coordenadas reais de cada toque despachado, na ordem;
+- `Proxima sessao`: o `call` da acao, ou `(fim do roteiro)`.
+
+Na tela, um retangulo amarelo contorna o template e uma cruz vermelha marca cada
+clique; o card fica na metade da tela oposta aos cliques para nao cobrir o marcador.
+Ha **um unico popup por acao**, mesmo quando ela tem varios `clicks`. Os botoes:
+
+- **OK**: espera `waitAfterMs` e segue para a proxima sessao;
+- **Cancel**: interrompe a execucao (`Debug: cancelado pelo usuario`,
+  `Execucao: interrompida pelo usuario`) e traz a tela do app de volta ao primeiro
+  plano.
+
+**Parar** com o popup aberto equivale a Cancel. Sem resposta em 5 minutos a
+execucao e cancelada (`Debug: sem resposta - execucao parada`). O modo debug nao
+muda o formato das sessoes nem aparece nas tentativas que nao localizaram nada.
 
 ## Reconhecimento visual
 

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_margin="16dp"
+    android:background="@drawable/debug_card_background"
+    android:elevation="8dp"
+    android:minWidth="280dp"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/debug_title"
+        android:textColor="@color/black"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Rola quando ha muitos cliques ou nomes longos, mantendo os botoes visiveis. -->
+    <ScrollView
+        android:id="@+id/detailsScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:layout_constrainedHeight="true"
+        app:layout_constraintBottom_toTopOf="@id/buttons"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/title"
+        app:layout_constraintVertical_bias="0">
+
+        <TableLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:shrinkColumns="1"
+            android:stretchColumns="1">
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_session" />
+                <TextView android:id="@+id/sessionValue" style="@style/DebugValue" />
+            </TableRow>
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_attempt" />
+                <TextView android:id="@+id/attemptValue" style="@style/DebugValue" />
+            </TableRow>
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_action" />
+                <TextView android:id="@+id/actionValue" style="@style/DebugValue" />
+            </TableRow>
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_match_start" />
+                <TextView android:id="@+id/matchStartValue" style="@style/DebugValue" />
+            </TableRow>
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_match_end" />
+                <TextView android:id="@+id/matchEndValue" style="@style/DebugValue" />
+            </TableRow>
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_click" />
+                <TextView android:id="@+id/clicksValue" style="@style/DebugValue" />
+            </TableRow>
+
+            <TableRow>
+                <TextView style="@style/DebugLabel" android:text="@string/debug_next_session" />
+                <TextView android:id="@+id/nextValue" style="@style/DebugValue" />
+            </TableRow>
+
+        </TableLayout>
+
+    </ScrollView>
+
+    <LinearLayout
+        android:id="@+id/buttons"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="end"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <Button
+            android:id="@+id/cancelButton"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/debug_cancel" />
+
+        <Button
+            android:id="@+id/okButton"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/debug_ok" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

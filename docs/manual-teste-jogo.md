@@ -371,6 +371,38 @@ adb shell cp /data/local/tmp/mainSession.json \
 
 O log guarda as últimas 500 linhas e sai também no Logcat (`tag:ClickService`).
 
+### 5.2.1 Conferindo o roteiro com o Modo debug
+
+Antes de deixar o roteiro rodar sozinho, ligue a chave **Modo debug** na tela do app e
+toque em **Iniciar** normalmente. A cada ação que encontrar o seu template, o app faz os
+cliques e, **antes** de passar para a sessão do `call`, mostra um popup por cima do jogo com:
+
+- `Sessao`, `Tentativa` e `Acao` que localizou o template;
+- `Posicao inicial`/`Posicao final`: o retângulo onde o template foi encontrado, em pixels
+  reais da tela — compare com a `searchArea` que você declarou;
+- `Clique`: a coordenada real de cada toque, na ordem em que saíram;
+- `Proxima sessao`: para onde o roteiro vai seguir.
+
+Na própria tela do jogo aparece um retângulo amarelo em volta do template e uma cruz
+vermelha em cada ponto clicado: é a forma mais rápida de ver se o toque caiu no botão certo.
+O card fica na metade da tela oposta ao clique para não cobrir o marcador.
+
+- **OK** segue o roteiro (o `waitAfterMs` conta a partir daí).
+- **Cancel** interrompe tudo e traz a tela do app de volta, com o log da execução.
+
+Use-o para:
+
+1. confirmar que a `searchArea` cobre o template (se a posição ficar na borda da área,
+   aumente a margem);
+2. conferir as coordenadas de `clicks` depois do escalonamento, principalmente quando a
+   resolução do aparelho é diferente do `screen` da sessão;
+3. seguir o grafo sessão a sessão, checando cada `call`.
+
+O popup aparece **uma vez por ação**, mesmo com vários `clicks`, e só para ações que
+localizaram o template; tentativas que não achavam nada continuam apenas no log. Se o popup
+ficar 5 minutos sem resposta, a execução é cancelada. Desligue a chave quando o roteiro
+estiver conferido.
+
 ### 5.3 Validação da carga inicial
 
 Antes de começar, o app confere tudo e recusa a execução com o arquivo e o campo culpados:
@@ -438,6 +470,7 @@ completo do campo e o valor recebido.
 | `Sessao x: nenhuma acao localizada em N tentativa(s) - encerrado` | a tela esperada não apareceu | aumente `retries`/`retryDelayMs` ou revise os templates da sessão |
 | `Transicao NOK - gesto rejeitado` / `gesto cancelado` | o sistema recusou o toque (outro gesto em curso, serviço desligando) | tente de novo com o jogo em primeiro plano |
 | Nada acontece e não há log | serviço desligado ou processo morto | reative o serviço; status deve estar **ATIVO** |
+| `Debug: sem resposta - execucao parada` | o popup do modo debug ficou 5 min sem resposta | toque em OK/Cancel no popup; desligue o **Modo debug** para rodar sem paradas |
 | `Transicao OK` mas o jogo não reage | o jogo ignora toques injetados ou o clique não caiu na área clicável | recentralize o recorte ou declare `clicks` explícitos; alguns jogos com anti-cheat descartam toques de acessibilidade |
 
 ---
@@ -453,3 +486,4 @@ completo do campo e o valor recebido.
 - [ ] Arquivo copiado para a pasta de templates (via `/data/local/tmp` ou Device Explorer)
 - [ ] `mainSession.json` na pasta `sessions/` e `Carga inicial: OK` no log
 - [ ] Cada template validado com escore ≥ 0.80 numa sessão de teste antes de montar o roteiro
+- [ ] Roteiro conferido passo a passo com o **Modo debug** ligado (posição do template e dos cliques)

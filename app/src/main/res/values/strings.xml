@@ -19,4 +19,16 @@
     <string name="execution_started">Execucao iniciada: abra a tela alvo.</string>
     <string name="execution_stopping">Parando a execucao.</string>
     <string name="execution_already_running">Ja existe uma execucao em andamento.</string>
+    <string name="debug_mode">Modo debug</string>
+    <string name="debug_title">Debug: acao executada</string>
+    <string name="debug_session">Sessao</string>
+    <string name="debug_attempt">Tentativa</string>
+    <string name="debug_action">Acao</string>
+    <string name="debug_match_start">Posicao inicial</string>
+    <string name="debug_match_end">Posicao final</string>
+    <string name="debug_click">Clique</string>
+    <string name="debug_next_session">Proxima sessao</string>
+    <string name="debug_end">(fim do roteiro)</string>
+    <string name="debug_cancel">Cancel</string>
+    <string name="debug_ok">OK</string>
 </resources>

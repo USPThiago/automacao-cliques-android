@@ -23,6 +23,23 @@ sealed class RunOutcome {
     data class Failure(val reason: String) : RunOutcome()
 }
 
+/** Informacoes mostradas no popup do modo debug depois dos cliques de uma acao. */
+data class DebugStep(
+    val sessionName: String,
+    val attempt: Int,
+    val attempts: Int,
+    val actionName: String,
+    /** Posicao do template na tela real. */
+    val match: Area,
+    /** Pontos efetivamente despachados, ja escalonados, na ordem. */
+    val clicks: List<ClickPoint>,
+    /** Proxima sessao (`call`), ou `null` quando a acao encerra o roteiro. */
+    val nextSession: String?
+)
+
+/** Resposta do usuario ao popup do modo debug. */
+enum class DebugChoice { CONTINUE, CANCEL }
+
 /**
  * Tudo que o executor precisa do aparelho. Isolado numa interface para que a
  * maquina de estados possa ser testada na JVM com capturas simuladas.
@@ -42,6 +59,12 @@ interface RunnerEnvironment {
 
     /** Relogio monotonico, em milissegundos. */
     fun elapsedMs(): Long
+
+    /** `true` quando o modo debug esta ligado. */
+    fun debugEnabled(): Boolean
+
+    /** Mostra o popup de debug e bloqueia ate o usuario responder. */
+    fun confirmStep(step: DebugStep): DebugChoice
 }
 
 /**
@@ -83,7 +106,7 @@ class SessionRunner(
                 if (cancelled) return cancelledOutcome(sessionStart)
                 log.add("Tentativa", "$attempt de ${session.attempts}")
 
-                when (val outcome = attempt(session)) {
+                when (val outcome = attempt(session, attempt)) {
                     is AttemptOutcome.Executed -> {
                         log.add("Tempo total", "${env.elapsedMs() - sessionStart} ms")
                         val call = outcome.call
@@ -138,7 +161,7 @@ class SessionRunner(
         object NothingFound : AttemptOutcome()
     }
 
-    private fun attempt(session: Session): AttemptOutcome {
+    private fun attempt(session: Session, attempt: Int): AttemptOutcome {
         val captureStart = env.elapsedMs()
         val capture = env.capture()
         log.add("Tempo captura", "${env.elapsedMs() - captureStart} ms")
@@ -167,10 +190,29 @@ class SessionRunner(
                     "right=${match.left + match.width},bottom=${match.top + match.height}"
             )
 
-            val clickOutcome = dispatchClicks(action, match, scale)
-            if (clickOutcome != null) {
-                log.add("Tempo acao", "${env.elapsedMs() - actionStart} ms")
-                return AttemptOutcome.Aborted(clickOutcome)
+            val clicks = when (val outcome = dispatchClicks(action, match, scale)) {
+                is ClicksOutcome.Failed -> {
+                    log.add("Tempo acao", "${env.elapsedMs() - actionStart} ms")
+                    return AttemptOutcome.Aborted(outcome.reason)
+                }
+                is ClicksOutcome.Ok -> outcome.points
+            }
+            if (env.debugEnabled()) {
+                log.add("Debug", "aguardando confirmacao")
+                val step = DebugStep(
+                    sessionName = session.name,
+                    attempt = attempt,
+                    attempts = session.attempts,
+                    actionName = action.name,
+                    match = Area(match.left, match.top, match.left + match.width, match.top + match.height),
+                    clicks = clicks,
+                    nextSession = action.call
+                )
+                if (env.confirmStep(step) == DebugChoice.CANCEL) {
+                    cancel()
+                    log.add("Debug", "cancelado pelo usuario")
+                    return AttemptOutcome.Aborted("cancelado no modo debug")
+                }
             }
             pause(action.waitAfterMs)
             log.add("Transicao", "OK")
@@ -229,23 +271,37 @@ class SessionRunner(
         return match
     }
 
-    /** Despacha os cliques da acao; devolve o motivo da falha ou `null` se todos sairam. */
+    /** Desfecho dos cliques de uma acao. */
+    private sealed class ClicksOutcome {
+
+        /** Todos sairam; [points] sao as coordenadas reais despachadas, na ordem. */
+        data class Ok(val points: List<ClickPoint>) : ClicksOutcome()
+
+        data class Failed(val reason: String) : ClicksOutcome()
+    }
+
+    /** Despacha os cliques da acao (o centro do template quando nao ha `clicks`). */
     private fun dispatchClicks(
         action: SessionAction,
         match: TemplateMatch,
         scale: ScreenScale
-    ): String? {
+    ): ClicksOutcome {
+        val dispatched = mutableListOf<ClickPoint>()
         val points = action.clicks
         if (points.isEmpty()) {
-            return dispatch(match.centerX, match.centerY)
+            dispatch(match.centerX, match.centerY)?.let { return ClicksOutcome.Failed(it) }
+            dispatched += ClickPoint(match.centerX.toInt(), match.centerY.toInt())
+            return ClicksOutcome.Ok(dispatched)
         }
         points.forEachIndexed { index, point ->
             if (index > 0) pause(point.delayMs ?: action.clickIntervalMs)
-            if (cancelled) return "interrompido"
-            val failure = dispatch(scale.scaleX(point.x).toFloat(), scale.scaleY(point.y).toFloat())
-            if (failure != null) return failure
+            if (cancelled) return ClicksOutcome.Failed("interrompido")
+            val x = scale.scaleX(point.x).toFloat()
+            val y = scale.scaleY(point.y).toFloat()
+            dispatch(x, y)?.let { return ClicksOutcome.Failed(it) }
+            dispatched += ClickPoint(x.toInt(), y.toInt())
         }
-        return null
+        return ClicksOutcome.Ok(dispatched)
     }
 
     private fun dispatch(x: Float, y: Float): String? {
