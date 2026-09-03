@@ -28,11 +28,17 @@ class SessionRunnerTest {
         val captures: MutableList<Capture>,
         val templates: Map<String, GrayImage>,
         val sessions: Map<String, Session>,
-        val clickOutcome: (Int) -> ClickOutcome = { ClickOutcome.COMPLETED }
+        val clickOutcome: (Int) -> ClickOutcome = { ClickOutcome.COMPLETED },
+        val debugEnabled: Boolean = false,
+        val debugChoice: (DebugStep) -> DebugChoice = { DebugChoice.CONTINUE }
     ) : RunnerEnvironment {
 
         val clicks = mutableListOf<Pair<Int, Int>>()
         val sleeps = mutableListOf<Long>()
+        val debugSteps = mutableListOf<DebugStep>()
+
+        /** Ordem dos eventos relevantes ao modo debug: `captura`, `clique`, `debug`. */
+        val events = mutableListOf<String>()
         var captureCount = 0
         private var clock = 0L
         var onCapture: (() -> Unit)? = null
@@ -40,12 +46,22 @@ class SessionRunnerTest {
         override fun capture(): Capture {
             onCapture?.invoke()
             captureCount++
+            events += "captura"
             return if (captures.size == 1) captures[0] else captures.removeAt(0)
         }
 
         override fun click(x: Float, y: Float): ClickOutcome {
             clicks += x.toInt() to y.toInt()
+            events += "clique"
             return clickOutcome(clicks.size - 1)
+        }
+
+        override fun debugEnabled(): Boolean = debugEnabled
+
+        override fun confirmStep(step: DebugStep): DebugChoice {
+            debugSteps += step
+            events += "debug"
+            return debugChoice(step)
         }
 
         override fun templateOf(name: String): GrayImage? = templates[name]
@@ -410,6 +426,145 @@ class SessionRunnerTest {
 
         assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
         assertEquals(128 to 192, env.clicks.single())
+    }
+
+    // --- modo debug ----------------------------------------------------------
+
+    @Test
+    fun `debug desligado nao pede confirmacao`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(session("menu", action("vai", "alvo_a"))))
+        assertTrue(env.debugSteps.isEmpty())
+    }
+
+    @Test
+    fun `debug com OK segue para a sessao chamada com um popup por acao`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB),
+            debugEnabled = true
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(sessionA, env.sessions))
+        assertEquals(2, env.clicks.size)
+        assertEquals(listOf("a", "b"), env.debugSteps.map { it.sessionName })
+        assertEquals(listOf("vai", "fim"), env.debugSteps.map { it.actionName })
+        assertEquals(listOf("b", null), env.debugSteps.map { it.nextSession })
+        assertEquals(1, env.debugSteps.first().attempt)
+        assertEquals(1, env.debugSteps.first().attempts)
+    }
+
+    @Test
+    fun `debug com Cancel interrompe sem clicar nem carregar outra sessao`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB),
+            debugEnabled = true,
+            debugChoice = { DebugChoice.CANCEL }
+        )
+
+        assertEquals(RunOutcome.Cancelled, SessionRunner(env, log).run(sessionA, env.sessions))
+        assertEquals(1, env.clicks.size)
+        assertEquals(1, env.captureCount)
+        assertEquals(1, env.debugSteps.size)
+        assertTrue(log.text(), log.lines().contains("Debug: cancelado pelo usuario"))
+        assertTrue(log.text(), log.lines().contains("Execucao: interrompida pelo usuario"))
+    }
+
+    @Test
+    fun `debug com varios cliques pede confirmacao uma vez com todos os pontos`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenAtDoubleResolution("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap(),
+            debugEnabled = true
+        )
+        val main = Session(
+            name = "menu",
+            screen = screenSize,
+            retries = 0,
+            actions = listOf(
+                action(
+                    "toque",
+                    "alvo_a",
+                    clicks = listOf(ClickPoint(10, 20), ClickPoint(30, 40), ClickPoint(5, 5))
+                )
+            ),
+            fileName = "menu.json"
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
+        assertEquals(3, env.clicks.size)
+        val step = env.debugSteps.single()
+        assertEquals(
+            listOf(ClickPoint(20, 40), ClickPoint(60, 80), ClickPoint(10, 10)),
+            step.clicks
+        )
+    }
+
+    @Test
+    fun `debug com cliques implicitos traz o centro do template`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_b")),
+            templates = templates(),
+            sessions = emptyMap(),
+            debugEnabled = true
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(session("menu", action("vai", "alvo_b"))))
+        assertEquals(listOf(ClickPoint(80, 112)), env.debugSteps.single().clicks)
+    }
+
+    @Test
+    fun `debug informa a posicao escalonada do template na tela real`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenAtDoubleResolution("alvo_b")),
+            templates = templates(),
+            sessions = emptyMap(),
+            debugEnabled = true
+        )
+        val main = Session(
+            name = "menu",
+            screen = screenSize,
+            retries = 0,
+            actions = listOf(action("vai", "alvo_b")),
+            fileName = "menu.json"
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
+        assertEquals(Area(128, 192, 192, 256), env.debugSteps.single().match)
+    }
+
+    @Test
+    fun `debug ocorre depois do ultimo clique e antes da proxima sessao`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session(
+            "a",
+            action("vai", "alvo_a", call = "b", clicks = listOf(ClickPoint(10, 20), ClickPoint(30, 40)))
+        )
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB),
+            debugEnabled = true
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(sessionA, env.sessions))
+        assertEquals(
+            listOf("captura", "clique", "clique", "debug", "captura", "clique", "debug"),
+            env.events
+        )
     }
 
     private companion object {

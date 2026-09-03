@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private val pendingStartCheck = Runnable { startWhenServiceReady() }
 
     private val log = ClickAccessibilityService.log
+    private val prefs by lazy { AppPreferences(this) }
     private var pendingStart = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +38,11 @@ class MainActivity : AppCompatActivity() {
         binding.stopButton.setOnClickListener { stop() }
         binding.clearLogButton.setOnClickListener { log.clear() }
         binding.copyLogButton.setOnClickListener { copyLog() }
+        binding.debugSwitch.isChecked = prefs.debugEnabled
+        binding.debugSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.debugEnabled = checked
+            log.add("Modo debug", if (checked) "ligado" else "desligado")
+        }
 
         binding.templatesPath.text =
             getString(R.string.templates_dir, TemplateStore(this).directory().absolutePath)

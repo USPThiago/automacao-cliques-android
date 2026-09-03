@@ -44,6 +44,14 @@
 
     </LinearLayout>
 
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/debugSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="4dp"
+        android:text="@string/debug_mode" />
+
     <TextView
         android:id="@+id/templatesPath"
         android:layout_width="match_parent"

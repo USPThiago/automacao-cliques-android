@@ -2,6 +2,7 @@ package com.example.automacaocliques
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.Rect
@@ -51,6 +52,11 @@ class ClickAccessibilityService : AccessibilityService() {
 
     private val running = AtomicBoolean(false)
 
+    private val prefs by lazy { AppPreferences(this) }
+
+    /** Popup do modo debug; so e tocado na thread principal. */
+    private val debugOverlay by lazy { DebugOverlay(this) }
+
     /**
      * Pedido de parada valido durante toda a execucao, inclusive antes de o
      * [SessionRunner] existir: Parar logo depois de Iniciar tem de valer.
@@ -84,9 +90,11 @@ class ClickAccessibilityService : AccessibilityService() {
         stopRequested.set(false)
         templates.invalidate()
         ensureExecutors()
+        // Lida uma vez por execucao, para nao pagar I/O a cada acao.
+        val debugEnabled = prefs.debugEnabled
         runnerExecutor.execute {
             try {
-                execute()
+                execute(debugEnabled)
             } finally {
                 running.set(false)
                 runner = null
@@ -99,9 +107,11 @@ class ClickAccessibilityService : AccessibilityService() {
     fun stop() {
         stopRequested.set(true)
         runner?.cancel()
+        // Um popup de debug aberto e fechado como Cancel para liberar a thread do roteiro.
+        mainHandler.post { debugOverlay.dismiss() }
     }
 
-    private fun execute() {
+    private fun execute(debugEnabled: Boolean) {
         if (!awaitForeignForeground()) {
             if (stopRequested.get()) {
                 log.add("Execucao", "parada")
@@ -121,7 +131,8 @@ class ClickAccessibilityService : AccessibilityService() {
             }
             is SessionLoad.Ok -> {
                 log.add("Carga inicial", "OK")
-                val sessionRunner = SessionRunner(ServiceEnvironment(), log)
+                if (debugEnabled) log.add("Modo debug", "ligado")
+                val sessionRunner = SessionRunner(ServiceEnvironment(debugEnabled), log)
                 runner = sessionRunner
                 // Parada pedida enquanto o executor era criado ou durante a
                 // validacao: o cancelamento e transferido para ele.
@@ -235,7 +246,7 @@ class ClickAccessibilityService : AccessibilityService() {
     }
 
     /** Ponte entre o executor de sessoes e as APIs do aparelho. */
-    private inner class ServiceEnvironment : RunnerEnvironment {
+    private inner class ServiceEnvironment(private val debugEnabled: Boolean) : RunnerEnvironment {
 
         override fun capture(): Capture {
             val latch = CountDownLatch(1)
@@ -274,6 +285,50 @@ class ClickAccessibilityService : AccessibilityService() {
         override fun sleep(ms: Long) = SystemClock.sleep(ms)
 
         override fun elapsedMs(): Long = SystemClock.elapsedRealtime()
+
+        override fun debugEnabled(): Boolean = debugEnabled
+
+        /**
+         * Mostra a sobreposicao na thread principal e espera a resposta. Sem
+         * resposta em [DEBUG_TIMEOUT_MS] a execucao e cancelada, para nao ficar
+         * presa caso a sobreposicao falhe.
+         */
+        override fun confirmStep(step: DebugStep): DebugChoice {
+            val latch = CountDownLatch(1)
+            var choice = DebugChoice.CONTINUE
+            mainHandler.post {
+                debugOverlay.show(step) {
+                    choice = it
+                    latch.countDown()
+                }
+            }
+            val answered = latch.await(DEBUG_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            val hidden = CountDownLatch(1)
+            mainHandler.post {
+                debugOverlay.hide()
+                hidden.countDown()
+            }
+            // A proxima captura so pode acontecer com a sobreposicao ja removida.
+            hidden.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            if (!answered) {
+                log.add("Debug", "sem resposta - execucao parada")
+                return DebugChoice.CANCEL
+            }
+            if (choice == DebugChoice.CANCEL) bringAppToFront()
+            return choice
+        }
+    }
+
+    /** Traz a tela do app de volta ao primeiro plano depois do Cancel do modo debug. */
+    private fun bringAppToFront() {
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        try {
+            startActivity(intent)
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Falha ao trazer o app para o primeiro plano", e)
+            log.add("Debug", "nao foi possivel trazer o app para o primeiro plano")
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
@@ -282,9 +337,10 @@ class ClickAccessibilityService : AccessibilityService() {
         Log.w(TAG, "Servico interrompido")
     }
 
-    override fun onUnbind(intent: android.content.Intent?): Boolean {
+    override fun onUnbind(intent: Intent?): Boolean {
         stop()
         mainHandler.removeCallbacksAndMessages(null)
+        debugOverlay.hide()
         synchronized(this) {
             runnerExecutor.shutdownNow()
             captureExecutor.shutdownNow()
@@ -309,6 +365,9 @@ class ClickAccessibilityService : AccessibilityService() {
         private const val CAPTURE_TIMEOUT_MS = 10_000L
 
         private const val GESTURE_TIMEOUT_MS = 10_000L
+
+        /** Espera maxima pela resposta ao popup do modo debug. */
+        private const val DEBUG_TIMEOUT_MS = 5 * 60_000L
 
         private const val UNSUPPORTED_API_ERROR = -1
 
