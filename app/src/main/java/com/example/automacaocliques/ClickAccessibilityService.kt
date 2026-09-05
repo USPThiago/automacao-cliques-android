@@ -15,6 +15,7 @@ import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -211,15 +212,16 @@ class ClickAccessibilityService : AccessibilityService() {
             captureExecutor,
             object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
+                    var bitmap: Bitmap? = null
                     try {
-                        val bitmap = screenshot.hardwareBuffer.use { buffer ->
+                        bitmap = screenshot.hardwareBuffer.use { buffer ->
                             Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
                                 ?.copy(Bitmap.Config.ARGB_8888, false)
                         }
                         onResult(bitmap, if (bitmap == null) CONVERSION_ERROR else 0)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Falha ao processar captura de tela", e)
-                        onResult(null, CONVERSION_ERROR)
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Falha ao processar captura de tela", t)
+                        bitmap?.recycle()
                     }
                 }
 
@@ -262,29 +264,27 @@ class ClickAccessibilityService : AccessibilityService() {
     private inner class ServiceEnvironment(private val debugEnabled: Boolean) : RunnerEnvironment {
 
         override fun capture(): Capture {
-            val latch = CountDownLatch(1)
-            var result: Capture = Capture.Failed(TIMEOUT_ERROR)
+            val queue = ArrayBlockingQueue<Capture>(1)
             captureScreen { bitmap, errorCode ->
-                try {
-                    result = if (bitmap == null) {
+                val capture = try {
+                    if (bitmap == null) {
                         Capture.Failed(errorCode)
                     } else {
                         Capture.Ok(bitmap.toGrayImage())
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Falha ao converter captura de tela", e)
-                    result = Capture.Failed(CONVERSION_ERROR)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Falha ao converter captura de tela", t)
+                    Capture.Failed(CONVERSION_ERROR)
                 } finally {
                     bitmap?.recycle()
-                    latch.countDown()
+                }
+                if (!queue.offer(capture)) {
+                    Log.e(TAG, "Fila de captura cheia - resultado descartado")
                 }
             }
             return try {
-                if (!latch.await(CAPTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                    Capture.Failed(TIMEOUT_ERROR)
-                } else {
-                    result
-                }
+                queue.poll(CAPTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                    ?: Capture.Failed(TIMEOUT_ERROR)
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 Capture.Failed(TIMEOUT_ERROR)
