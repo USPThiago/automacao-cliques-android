@@ -95,6 +95,9 @@ class ClickAccessibilityService : AccessibilityService() {
         runnerExecutor.execute {
             try {
                 execute(debugEnabled)
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro inesperado durante execucao", e)
+                log.add("Execucao", "erro inesperado: ${e.message}")
             } finally {
                 running.set(false)
                 runner = null
@@ -208,11 +211,16 @@ class ClickAccessibilityService : AccessibilityService() {
             captureExecutor,
             object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
-                    val bitmap = screenshot.hardwareBuffer.use { buffer ->
-                        Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
-                            ?.copy(Bitmap.Config.ARGB_8888, false)
+                    try {
+                        val bitmap = screenshot.hardwareBuffer.use { buffer ->
+                            Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                                ?.copy(Bitmap.Config.ARGB_8888, false)
+                        }
+                        onResult(bitmap, if (bitmap == null) CONVERSION_ERROR else 0)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Falha ao processar captura de tela", e)
+                        onResult(null, CONVERSION_ERROR)
                     }
-                    onResult(bitmap, if (bitmap == null) CONVERSION_ERROR else 0)
                 }
 
                 override fun onFailure(errorCode: Int) {
@@ -224,25 +232,30 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /** Constroi e despacha um gesto de toque em ([x], [y]). */
     fun click(x: Float, y: Float, onOutcome: (ClickOutcome) -> Unit = {}) {
-        val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, CLICK_DURATION_MS))
-            .build()
+        try {
+            val path = Path().apply { moveTo(x, y) }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0L, CLICK_DURATION_MS))
+                .build()
 
-        val dispatched = dispatchGesture(
-            gesture,
-            object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
-                    onOutcome(ClickOutcome.COMPLETED)
-                }
+            val dispatched = dispatchGesture(
+                gesture,
+                object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        onOutcome(ClickOutcome.COMPLETED)
+                    }
 
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    onOutcome(ClickOutcome.CANCELLED)
-                }
-            },
-            null
-        )
-        if (!dispatched) onOutcome(ClickOutcome.REJECTED)
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        onOutcome(ClickOutcome.CANCELLED)
+                    }
+                },
+                null
+            )
+            if (!dispatched) onOutcome(ClickOutcome.REJECTED)
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao despachar clique", e)
+            onOutcome(ClickOutcome.REJECTED)
+        }
     }
 
     /** Ponte entre o executor de sessoes e as APIs do aparelho. */
@@ -252,32 +265,56 @@ class ClickAccessibilityService : AccessibilityService() {
             val latch = CountDownLatch(1)
             var result: Capture = Capture.Failed(TIMEOUT_ERROR)
             captureScreen { bitmap, errorCode ->
-                result = if (bitmap == null) {
-                    Capture.Failed(errorCode)
-                } else {
-                    Capture.Ok(bitmap.toGrayImage()).also { bitmap.recycle() }
+                try {
+                    result = if (bitmap == null) {
+                        Capture.Failed(errorCode)
+                    } else {
+                        Capture.Ok(bitmap.toGrayImage())
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Falha ao converter captura de tela", e)
+                    result = Capture.Failed(CONVERSION_ERROR)
+                } finally {
+                    bitmap?.recycle()
+                    latch.countDown()
                 }
-                latch.countDown()
             }
-            if (!latch.await(CAPTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                return Capture.Failed(TIMEOUT_ERROR)
+            return try {
+                if (!latch.await(CAPTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    Capture.Failed(TIMEOUT_ERROR)
+                } else {
+                    result
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                Capture.Failed(TIMEOUT_ERROR)
             }
-            return result
         }
 
         override fun click(x: Float, y: Float): ClickOutcome {
             val latch = CountDownLatch(1)
             var outcome = ClickOutcome.REJECTED
             mainHandler.post {
-                this@ClickAccessibilityService.click(x, y) {
-                    outcome = it
+                try {
+                    this@ClickAccessibilityService.click(x, y) {
+                        outcome = it
+                        latch.countDown()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Falha ao solicitar clique", e)
                     latch.countDown()
                 }
             }
-            if (!latch.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                return ClickOutcome.CANCELLED
+            return try {
+                if (!latch.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    ClickOutcome.CANCELLED
+                } else {
+                    outcome
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                ClickOutcome.CANCELLED
             }
-            return outcome
         }
 
         override fun templateOf(name: String): GrayImage? = templates.get(name)?.image

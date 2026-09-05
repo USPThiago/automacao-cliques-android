@@ -163,7 +163,7 @@ object TemplateMatcher {
     ): List<TemplateMatch> {
         val lastX = limitX.coerceAtMost(image.width) - template.width
         val lastY = limitY.coerceAtMost(image.height) - template.height
-        if (lastX < fromX || lastY < fromY) return emptyList()
+        if (lastX < fromX || lastY < fromY || limit <= 0) return emptyList()
 
         val count = template.width * template.height
         var sumT = 0L
@@ -176,20 +176,28 @@ object TemplateMatcher {
         val varianceT = sumTT.toDouble() / count - meanT * meanT
         if (varianceT <= 1e-6) return emptyList()
 
-        val found = ArrayList<TemplateMatch>((lastX - fromX + 1) * (lastY - fromY + 1))
+        val found = ArrayList<TemplateMatch>(limit.coerceAtMost(16))
         for (top in fromY..lastY) {
             for (left in fromX..lastX) {
-                found += TemplateMatch(
-                    left = left,
-                    top = top,
-                    width = template.width,
-                    height = template.height,
-                    score = correlate(image, template, left, top, count, meanT, varianceT),
-                    scale = 1.0
-                )
+                val score = correlate(image, template, left, top, count, meanT, varianceT)
+                if (found.size < limit) {
+                    addCandidate(found, TemplateMatch(left, top, template.width, template.height, score, 1.0))
+                } else if (score > found.last().score) {
+                    found.removeAt(found.size - 1)
+                    addCandidate(found, TemplateMatch(left, top, template.width, template.height, score, 1.0))
+                }
             }
         }
-        return found.sortedByDescending { it.score }.take(limit)
+        return found
+    }
+
+    /** Insere [candidate] em [candidates] mantendo a ordem decrescente de escore. */
+    private fun addCandidate(candidates: MutableList<TemplateMatch>, candidate: TemplateMatch) {
+        var i = candidates.size
+        while (i > 0 && candidate.score > candidates[i - 1].score) {
+            i--
+        }
+        candidates.add(i, candidate)
     }
 
     private fun correlate(

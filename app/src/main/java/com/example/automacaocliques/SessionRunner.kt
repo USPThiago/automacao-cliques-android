@@ -94,6 +94,16 @@ class SessionRunner(
      * feitas no aparelho durante a execucao nao escapem da validacao.
      */
     fun run(main: Session, sessions: Map<String, Session> = emptyMap()): RunOutcome {
+        return try {
+            runInternal(main, sessions)
+        } catch (e: Exception) {
+            val reason = "erro inesperado na execucao: ${e.message}"
+            log.add("Execucao", reason)
+            RunOutcome.Failure(reason)
+        }
+    }
+
+    private fun runInternal(main: Session, sessions: Map<String, Session>): RunOutcome {
         var session = main
 
         while (true) {
