@@ -86,17 +86,20 @@ class GrayImage(
     }
 
     companion object {
-        /** Converte pixels ARGB (ordem de [android.graphics.Bitmap.getPixels]) em luminancia. */
+        /** Converte pixels ARGB (ordem de [android.graphics.Bitmap.getPixels]) em luminancia.
+         *  Reaproveita o proprio [argb] como armazenamento para economizar uma alocacao. */
         fun fromArgb(width: Int, height: Int, argb: IntArray): GrayImage {
-            val gray = IntArray(width * height)
-            for (i in gray.indices) {
+            require(argb.size == width * height) {
+                "esperados ${width * height} pixels, recebidos ${argb.size}"
+            }
+            for (i in argb.indices) {
                 val color = argb[i]
                 val r = (color shr 16) and 0xFF
                 val g = (color shr 8) and 0xFF
                 val b = color and 0xFF
-                gray[i] = (r * 299 + g * 587 + b * 114) / 1000
+                argb[i] = (r * 299 + g * 587 + b * 114) / 1000
             }
-            return GrayImage(width, height, gray)
+            return GrayImage(width, height, argb)
         }
     }
 }
