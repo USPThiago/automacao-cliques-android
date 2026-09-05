@@ -70,8 +70,15 @@ class TemplateStore(private val context: Context) {
             Log.w(TAG, "Falha ao decodificar ${file.name}")
             return null
         }
-        return Template(key, bitmap.toGrayImage()).also {
-            Log.i(TAG, "Template '$key' carregado (${bitmap.width}x${bitmap.height})")
+        val width = bitmap.width
+        val height = bitmap.height
+        val image = try {
+            bitmap.toGrayImage()
+        } finally {
+            bitmap.recycle()
+        }
+        return Template(key, image).also {
+            Log.i(TAG, "Template '$key' carregado (${width}x${height})")
         }
     }
 
