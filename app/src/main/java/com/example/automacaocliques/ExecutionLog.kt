@@ -15,17 +15,34 @@ class ExecutionLog(private val limit: Int = MAX_LINES) {
     @Volatile
     var listener: (() -> Unit)? = null
 
+    /**
+     * `false` interrompe a gravacao na caixa de log da tela; o Logcat e as
+     * linhas de erro/resultado ([addError]) continuam sempre.
+     */
+    @Volatile
+    var enabled = true
+
     /** Acrescenta a linha `rotulo: valor`. */
     fun add(label: String, value: String) = add("$label: $value")
 
     /** Acrescenta uma linha ja formatada. */
-    fun add(line: String) {
-        synchronized(lines) {
-            lines.addLast(line)
-            while (lines.size > limit) lines.removeFirst()
+    fun add(line: String) = record(line, important = false)
+
+    /** Acrescenta a linha `rotulo: valor` mesmo com a gravacao desligada. */
+    fun addError(label: String, value: String) = record("$label: $value", important = true)
+
+    /** Acrescenta uma linha ja formatada mesmo com a gravacao desligada. */
+    fun addError(line: String) = record(line, important = true)
+
+    private fun record(line: String, important: Boolean) {
+        if (enabled || important) {
+            synchronized(lines) {
+                lines.addLast(line)
+                while (lines.size > limit) lines.removeFirst()
+            }
+            listener?.invoke()
         }
         Log.i(ClickAccessibilityService.TAG, line)
-        listener?.invoke()
     }
 
     /** Linhas atuais, da mais antiga para a mais recente. */

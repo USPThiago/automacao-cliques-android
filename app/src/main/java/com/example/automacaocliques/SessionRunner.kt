@@ -1,5 +1,7 @@
 package com.example.automacaocliques
 
+import kotlin.random.Random
+
 /** Resultado de uma captura de tela. */
 sealed class Capture {
 
@@ -65,6 +67,18 @@ interface RunnerEnvironment {
 
     /** Mostra o popup de debug e bloqueia ate o usuario responder. */
     fun confirmStep(step: DebugStep): DebugChoice
+
+    /** `true` quando os retangulos de busca/match devem ser desenhados na tela. */
+    fun highlightsEnabled(): Boolean = false
+
+    /**
+     * Desenha [search] (area onde o template foi pesquisado) e [match] (regiao
+     * localizada), substituindo o desenho anterior. Coordenadas na tela real.
+     */
+    fun showHighlight(search: Area, match: Area) = Unit
+
+    /** Remove os retangulos, se exibidos. Chamado ao encerrar a execucao. */
+    fun hideHighlights() = Unit
 }
 
 /**
@@ -75,7 +89,9 @@ interface RunnerEnvironment {
  */
 class SessionRunner(
     private val env: RunnerEnvironment,
-    private val log: ExecutionLog
+    private val log: ExecutionLog,
+    /** Fonte de aleatoriedade do `clickArea`, injetavel nos testes. */
+    private val random: Random = Random.Default
 ) {
 
     @Volatile
@@ -84,9 +100,32 @@ class SessionRunner(
     /** Ultima resolucao registrada no log, para nao repetir a linha a cada captura. */
     private var loggedScreen: Size? = null
 
+    /** Marca do inicio do processamento, para o `Tempo total` do resumo final. */
+    private var runStart = 0L
+
+    /** Instante do ultimo clique despachado; `null` antes do primeiro. */
+    private var lastClickAt: Long? = null
+
+    /** Cliques despachados no processamento inteiro, para o resumo final. */
+    private var clicksSent = 0
+
+    /** Sessoes `Resultado` iniciadas (cada passagem por ela conta), para o resumo. */
+    private var resultadoSessions = 0
+
     fun cancel() {
         cancelled = true
     }
+
+    /** Contadores da execucao, usados no resumo final do log. */
+    data class RunStats(
+        val resultadoSessions: Int,
+        val clicksSent: Int,
+        val elapsedMs: Long
+    )
+
+    /** Contadores do processamento; validos mesmo apos falha ou cancelamento. */
+    fun stats(): RunStats =
+        RunStats(resultadoSessions, clicksSent, env.elapsedMs() - runStart)
 
     /**
      * Executa o grafo ja validado na carga inicial: [sessions] mapeia nome de
@@ -98,38 +137,39 @@ class SessionRunner(
             runInternal(main, sessions)
         } catch (e: Exception) {
             val reason = "erro inesperado na execucao: ${e.message}"
-            log.add("Execucao", reason)
+            log.addError("Execucao", reason)
             RunOutcome.Failure(reason)
+        } finally {
+            if (env.highlightsEnabled()) env.hideHighlights()
         }
     }
 
     private fun runInternal(main: Session, sessions: Map<String, Session>): RunOutcome {
         var session = main
+        runStart = env.elapsedMs()
 
         while (true) {
-            val sessionStart = env.elapsedMs()
+            if (session.name == RESULTADO_SESSION) resultadoSessions++
             log.add("Sessao", session.name)
 
             var next: Session? = null
             var attempt = 1
             while (attempt <= session.attempts) {
-                if (cancelled) return cancelledOutcome(sessionStart)
+                if (cancelled) return cancelledOutcome()
                 log.add("Tentativa", "$attempt de ${session.attempts}")
 
                 when (val outcome = attempt(session, attempt)) {
                     is AttemptOutcome.Executed -> {
-                        log.add("Tempo total", "${env.elapsedMs() - sessionStart} ms")
                         val call = outcome.call
                             ?: return RunOutcome.Success
                         val fileName = SessionValidator.fileNameOf(call)
                         next = sessions[fileName] ?: run {
-                            log.add("Transicao", "NOK - sessao $call ilegivel")
+                            log.addError("Transicao", "NOK - sessao $call ilegivel")
                             return RunOutcome.Failure("sessao $call ilegivel")
                         }
                     }
                     is AttemptOutcome.Aborted -> {
-                        if (cancelled) return cancelledOutcome(sessionStart)
-                        log.add("Tempo total", "${env.elapsedMs() - sessionStart} ms")
+                        if (cancelled) return cancelledOutcome()
                         return RunOutcome.Failure(outcome.reason)
                     }
                     AttemptOutcome.NothingFound -> {
@@ -141,20 +181,18 @@ class SessionRunner(
             }
 
             if (next == null) {
-                if (cancelled) return cancelledOutcome(sessionStart)
+                if (cancelled) return cancelledOutcome()
                 val reason = "Sessao ${session.name}: nenhuma acao localizada em " +
                     "${session.attempts} tentativa(s) - encerrado"
-                log.add(reason)
-                log.add("Tempo total", "${env.elapsedMs() - sessionStart} ms")
+                log.addError(reason)
                 return RunOutcome.Failure(reason)
             }
             session = next
         }
     }
 
-    private fun cancelledOutcome(sessionStart: Long): RunOutcome {
-        log.add("Execucao", "interrompida pelo usuario")
-        log.add("Tempo total", "${env.elapsedMs() - sessionStart} ms")
+    private fun cancelledOutcome(): RunOutcome {
+        log.addError("Execucao", "interrompida pelo usuario")
         return RunOutcome.Cancelled
     }
 
@@ -172,11 +210,14 @@ class SessionRunner(
     }
 
     private fun attempt(session: Session, attempt: Int): AttemptOutcome {
+        // Os retangulos nao podem aparecer na captura: tiram-se antes e o
+        // proximo match os desenha de novo.
+        if (env.highlightsEnabled()) env.hideHighlights()
         val captureStart = env.elapsedMs()
         val capture = env.capture()
         log.add("Tempo captura", "${env.elapsedMs() - captureStart} ms")
         if (capture is Capture.Failed) {
-            log.add("Transicao", "NOK - captura falhou (codigo=${capture.errorCode})")
+            log.addError("Transicao", "NOK - captura falhou (codigo=${capture.errorCode})")
             return AttemptOutcome.NothingFound
         }
         val screen = (capture as Capture.Ok).image
@@ -188,11 +229,16 @@ class SessionRunner(
 
         for (action in session.actions) {
             if (cancelled) return AttemptOutcome.Aborted("interrompido")
-            val actionStart = env.elapsedMs()
+
+            // Acoes que nao localizam o template nao geram linhas no log.
+            val located = locate(screen, action, scale) ?: continue
+            val match = located.match
+
             log.add("Acao", action.name)
-
-            val match = locate(screen, action, scale) ?: continue
-
+            log.add("Tempo localizacao", "${located.elapsedMs} ms")
+            if (env.highlightsEnabled()) {
+                env.showHighlight(located.area, match.area())
+            }
             log.add("Escala", scale.describe())
             log.add(
                 "Posicao",
@@ -200,11 +246,10 @@ class SessionRunner(
                     "right=${match.left + match.width},bottom=${match.top + match.height}"
             )
 
-            val clicks = when (val outcome = dispatchClicks(action, match, scale)) {
-                is ClicksOutcome.Failed -> {
-                    log.add("Tempo acao", "${env.elapsedMs() - actionStart} ms")
-                    return AttemptOutcome.Aborted(outcome.reason)
-                }
+            val clicks = when (
+                val outcome = dispatchClicks(action, match, scale, capture.size)
+            ) {
+                is ClicksOutcome.Failed -> return AttemptOutcome.Aborted(outcome.reason)
                 is ClicksOutcome.Ok -> outcome.points
             }
             if (env.debugEnabled()) {
@@ -214,33 +259,35 @@ class SessionRunner(
                     attempt = attempt,
                     attempts = session.attempts,
                     actionName = action.name,
-                    match = Area(match.left, match.top, match.left + match.width, match.top + match.height),
+                    match = match.area(),
                     clicks = clicks,
                     nextSession = action.call
                 )
                 if (env.confirmStep(step) == DebugChoice.CANCEL) {
                     cancel()
-                    log.add("Debug", "cancelado pelo usuario")
+                    log.addError("Debug", "cancelado pelo usuario")
                     return AttemptOutcome.Aborted("cancelado no modo debug")
                 }
             }
             pause(action.waitAfterMs)
             log.add("Transicao", "OK")
-            log.add("Tempo acao", "${env.elapsedMs() - actionStart} ms")
             return AttemptOutcome.Executed(action.call)
         }
         return AttemptOutcome.NothingFound
     }
+
+    /** Match aceito do template da acao, a area varrida e o tempo da busca. */
+    private data class Located(val match: TemplateMatch, val area: Area, val elapsedMs: Long)
 
     /** Ocorrencia aceita do template da acao, ou `null` se nao localizada. */
     private fun locate(
         screen: GrayImage,
         action: SessionAction,
         scale: ScreenScale
-    ): TemplateMatch? {
+    ): Located? {
         val template = env.templateOf(action.locate)
         if (template == null) {
-            log.add("Acao ${action.name}", "template '${action.locate}' ausente")
+            log.addError("Acao ${action.name}", "template '${action.locate}' ausente")
             return null
         }
         val screenSize = Size(screen.width, screen.height)
@@ -249,7 +296,7 @@ class SessionRunner(
         val scales = action.scales.map { it * scale.templateFactor }
         val smallest = scales.min()
         if (template.width * smallest > area.width || template.height * smallest > area.height) {
-            log.add(
+            log.addError(
                 "Acao ${action.name}",
                 "template '${action.locate}' (${template.width}x${template.height}) " +
                     "nao cabe na area ${area.describe()}"
@@ -265,20 +312,9 @@ class SessionRunner(
             area,
             maxOf(TemplateMatcher.EARLY_EXIT_SCORE, action.threshold)
         )
-        val elapsed = env.elapsedMs() - start
-        log.add("Tempo localizacao", "$elapsed ms")
 
-        if (match == null || match.score < action.threshold) {
-            log.add(
-                "Acao ${action.name}",
-                "nao localizada (melhor escore=%.3f, limite=%.2f)".format(
-                    match?.score ?: 0.0,
-                    action.threshold
-                )
-            )
-            return null
-        }
-        return match
+        if (match == null || match.score < action.threshold) return null
+        return Located(match, area, env.elapsedMs() - start)
     }
 
     /** Desfecho dos cliques de uma acao. */
@@ -290,16 +326,34 @@ class SessionRunner(
         data class Failed(val reason: String) : ClicksOutcome()
     }
 
-    /** Despacha os cliques da acao (o centro do template quando nao ha `clicks`). */
+    /**
+     * Despacha os cliques da acao: um ponto aleatorio de `clickArea`, a lista
+     * `clicks` ou, sem os dois, o centro do template localizado.
+     */
     private fun dispatchClicks(
         action: SessionAction,
         match: TemplateMatch,
-        scale: ScreenScale
+        scale: ScreenScale,
+        screenSize: Size
     ): ClicksOutcome {
         val dispatched = mutableListOf<ClickPoint>()
+        var first = true
+        val clickArea = action.clickArea
+        if (clickArea != null) {
+            val area = scale.scale(clickArea).clipTo(screenSize)
+            if (area.width <= 0 || area.height <= 0) {
+                return ClicksOutcome.Failed("clickArea ${area.describe()} fora da tela")
+            }
+            val x = random.nextInt(area.left, area.right).toFloat()
+            val y = random.nextInt(area.top, area.bottom).toFloat()
+            dispatch(x, y, reportInterval = true)?.let { return ClicksOutcome.Failed(it) }
+            dispatched += ClickPoint(x.toInt(), y.toInt())
+            return ClicksOutcome.Ok(dispatched)
+        }
         val points = action.clicks
         if (points.isEmpty()) {
-            dispatch(match.centerX, match.centerY)?.let { return ClicksOutcome.Failed(it) }
+            dispatch(match.centerX, match.centerY, reportInterval = true)
+                ?.let { return ClicksOutcome.Failed(it) }
             dispatched += ClickPoint(match.centerX.toInt(), match.centerY.toInt())
             return ClicksOutcome.Ok(dispatched)
         }
@@ -308,22 +362,38 @@ class SessionRunner(
             if (cancelled) return ClicksOutcome.Failed("interrompido")
             val x = scale.scaleX(point.x).toFloat()
             val y = scale.scaleY(point.y).toFloat()
-            dispatch(x, y)?.let { return ClicksOutcome.Failed(it) }
+            dispatch(x, y, reportInterval = first)?.let { return ClicksOutcome.Failed(it) }
+            first = false
             dispatched += ClickPoint(x.toInt(), y.toInt())
         }
         return ClicksOutcome.Ok(dispatched)
     }
 
-    private fun dispatch(x: Float, y: Float): String? {
+    /**
+     * Despacha um toque, contando-o e registrando a linha `Clique`. Com
+     * [reportInterval], registra antes o intervalo desde o ultimo clique da
+     * sessao/acao anterior (omitido quando nao houve clique anterior).
+     */
+    private fun dispatch(x: Float, y: Float, reportInterval: Boolean): String? {
+        val now = env.elapsedMs()
+        if (reportInterval) {
+            lastClickAt?.let { log.add("Tempo desde ultimo clique", "${now - it} ms") }
+        }
         log.add("Clique", "x=${x.toInt()},y=${y.toInt()}")
         return when (env.click(x, y)) {
-            ClickOutcome.COMPLETED -> null
+            ClickOutcome.COMPLETED -> {
+                // So o gesto aceito conta como clique enviado e vira
+                // referencia para o proximo intervalo.
+                lastClickAt = now
+                clicksSent++
+                null
+            }
             ClickOutcome.REJECTED -> {
-                log.add("Transicao", "NOK - gesto rejeitado")
+                log.addError("Transicao", "NOK - gesto rejeitado")
                 "gesto rejeitado"
             }
             ClickOutcome.CANCELLED -> {
-                log.add("Transicao", "NOK - gesto cancelado")
+                log.addError("Transicao", "NOK - gesto cancelado")
                 "gesto cancelado"
             }
         }
@@ -341,5 +411,8 @@ class SessionRunner(
 
     private companion object {
         const val PAUSE_SLICE_MS = 100L
+
+        /** Nome de sessao contado no `Total de salas` do resumo final. */
+        const val RESULTADO_SESSION = "Resultado"
     }
 }

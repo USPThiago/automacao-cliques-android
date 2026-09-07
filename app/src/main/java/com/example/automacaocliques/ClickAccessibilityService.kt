@@ -45,11 +45,11 @@ class ClickAccessibilityService : AccessibilityService() {
     @Volatile
     private var captureExecutor = Executors.newSingleThreadExecutor()
 
-    /** Recortes usados no reconhecimento visual das telas. */
-    val templates: TemplateStore by lazy { TemplateStore(this) }
-
-    /** Arquivos de sessao em `files/sessions/`. */
-    val sessions: SessionStore by lazy { SessionStore(this) }
+    /**
+     * Stores da execucao corrente, presos ao modo (normal/teste) vigente no
+     * inicio: trocar o toggle no meio do roteiro nao muda as pastas em uso.
+     */
+    private var runTemplates: TemplateStore? = null
 
     private val running = AtomicBoolean(false)
 
@@ -57,6 +57,9 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /** Popup do modo debug; so e tocado na thread principal. */
     private val debugOverlay by lazy { DebugOverlay(this) }
+
+    /** Retangulos de busca/match da execucao; so e tocado na thread principal. */
+    private val highlightOverlay by lazy { HighlightOverlay(this) }
 
     /**
      * Pedido de parada valido durante toda a execucao, inclusive antes de o
@@ -85,23 +88,26 @@ class ClickAccessibilityService : AccessibilityService() {
      */
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) {
-            log.add("Execucao", "ja existe uma execucao em andamento")
+            log.addError("Execucao", "ja existe uma execucao em andamento")
             return false
         }
         stopRequested.set(false)
-        templates.invalidate()
         ensureExecutors()
-        // Lida uma vez por execucao, para nao pagar I/O a cada acao.
+        // Lidas uma vez por execucao, para nao pagar I/O a cada acao.
         val debugEnabled = prefs.debugEnabled
+        val highlightsEnabled = prefs.highlightsEnabled
+        val testMode = prefs.testMode
+        log.enabled = prefs.logEnabled
         runnerExecutor.execute {
             try {
-                execute(debugEnabled)
+                execute(debugEnabled, highlightsEnabled, testMode)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro inesperado durante execucao", e)
-                log.add("Execucao", "erro inesperado: ${e.message}")
+                log.addError("Execucao", "erro inesperado: ${e.message}")
             } finally {
                 running.set(false)
                 runner = null
+                runTemplates = null
             }
         }
         return true
@@ -115,38 +121,67 @@ class ClickAccessibilityService : AccessibilityService() {
         mainHandler.post { debugOverlay.dismiss() }
     }
 
-    private fun execute(debugEnabled: Boolean) {
-        if (!awaitForeignForeground()) {
-            if (stopRequested.get()) {
-                log.add("Execucao", "parada")
-            } else {
-                log.add("Transicao", "NOK - app em primeiro plano")
-            }
-            return
-        }
-        // A validacao vem depois da troca de app porque as dimensoes e a
-        // orientacao usadas nela precisam ser as do app alvo, e nao as da
-        // interface de automacao, que e sempre paisagem.
-        val screen = screenSize()
-        when (val load = SessionValidator.load(sessions, templates::sizeOf, screen)) {
-            is SessionLoad.Failure -> {
-                log.add("Carga inicial", "NOK - ${load.reason}")
+    private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean, testMode: Boolean) {
+        val startedAt = SystemClock.elapsedRealtime()
+        var sessionRunner: SessionRunner? = null
+        try {
+            runTemplates = TemplateStore(this, testMode)
+            if (!awaitForeignForeground()) {
+                if (stopRequested.get()) {
+                    log.addError("Execucao", "parada")
+                } else {
+                    log.addError("Transicao", "NOK - app em primeiro plano")
+                }
                 return
             }
-            is SessionLoad.Ok -> {
-                log.add("Carga inicial", "OK")
-                if (debugEnabled) log.add("Modo debug", "ligado")
-                val sessionRunner = SessionRunner(ServiceEnvironment(debugEnabled), log)
-                runner = sessionRunner
-                // Parada pedida enquanto o executor era criado ou durante a
-                // validacao: o cancelamento e transferido para ele.
-                if (stopRequested.get()) sessionRunner.cancel()
-                when (val outcome = sessionRunner.run(load.main, load.sessions)) {
-                    RunOutcome.Success -> log.add("Execucao", "concluida com sucesso")
-                    RunOutcome.Cancelled -> log.add("Execucao", "parada")
-                    is RunOutcome.Failure -> log.add("Execucao", "encerrada: ${outcome.reason}")
+            // A validacao vem depois da troca de app porque as dimensoes e a
+            // orientacao usadas nela precisam ser as do app alvo, e nao as da
+            // interface de automacao, que e sempre paisagem.
+            val screen = screenSize()
+            val load = SessionValidator.load(
+                SessionStore(this, testMode),
+                checkNotNull(runTemplates)::sizeOf,
+                screen
+            )
+            when (load) {
+                is SessionLoad.Failure -> {
+                    log.addError("Carga inicial", "NOK - ${load.reason}")
+                }
+                is SessionLoad.Ok -> {
+                    log.add("Carga inicial", "OK")
+                    if (debugEnabled) log.add("Modo debug", "ligado")
+                    if (highlightsEnabled) log.add("Retangulos", "ligados")
+                    sessionRunner = SessionRunner(
+                        ServiceEnvironment(
+                            debugEnabled,
+                            highlightsEnabled,
+                            checkNotNull(runTemplates)
+                        ),
+                        log
+                    )
+                    runner = sessionRunner
+                    // Parada pedida enquanto o executor era criado ou durante a
+                    // validacao: o cancelamento e transferido para ele.
+                    if (stopRequested.get()) sessionRunner.cancel()
+                    when (val outcome = sessionRunner.run(load.main, load.sessions)) {
+                        RunOutcome.Success -> log.addError("Execucao", "concluida com sucesso")
+                        RunOutcome.Cancelled -> log.addError("Execucao", "parada")
+                        is RunOutcome.Failure ->
+                            log.addError("Execucao", "encerrada: ${outcome.reason}")
+                    }
                 }
             }
+        } finally {
+            // O resumo encerra o log em qualquer saida, inclusive falhas
+            // antes de o roteiro existir (transicao/carga inicial).
+            logSummary(
+                sessionRunner?.stats()
+                    ?: SessionRunner.RunStats(
+                        resultadoSessions = 0,
+                        clicksSent = 0,
+                        elapsedMs = SystemClock.elapsedRealtime() - startedAt
+                    )
+            )
         }
     }
 
@@ -261,7 +296,11 @@ class ClickAccessibilityService : AccessibilityService() {
     }
 
     /** Ponte entre o executor de sessoes e as APIs do aparelho. */
-    private inner class ServiceEnvironment(private val debugEnabled: Boolean) : RunnerEnvironment {
+    private inner class ServiceEnvironment(
+        private val debugEnabled: Boolean,
+        private val highlightsEnabled: Boolean,
+        private val templates: TemplateStore
+    ) : RunnerEnvironment {
 
         override fun capture(): Capture {
             val queue = ArrayBlockingQueue<Capture>(1)
@@ -325,6 +364,29 @@ class ClickAccessibilityService : AccessibilityService() {
 
         override fun debugEnabled(): Boolean = debugEnabled
 
+        override fun highlightsEnabled(): Boolean = highlightsEnabled
+
+        override fun showHighlight(search: Area, match: Area) {
+            mainHandler.post { highlightOverlay.show(search, match) }
+        }
+
+        /**
+         * Remove os retangulos e so retorna quando ja sairam da tela: a
+         * proxima captura nao pode enxerga-los.
+         */
+        override fun hideHighlights() {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                highlightOverlay.hide()
+                return
+            }
+            val removed = CountDownLatch(1)
+            mainHandler.post {
+                highlightOverlay.hide()
+                removed.countDown()
+            }
+            removed.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        }
+
         /**
          * Mostra a sobreposicao na thread principal e espera a resposta. Sem
          * resposta em [DEBUG_TIMEOUT_MS] a execucao e cancelada, para nao ficar
@@ -354,12 +416,31 @@ class ClickAccessibilityService : AccessibilityService() {
             // A proxima captura so pode acontecer com a sobreposicao ja removida.
             hidden.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             if (!answered) {
-                log.add("Debug", "sem resposta - execucao parada")
+                log.addError("Debug", "sem resposta - execucao parada")
                 return DebugChoice.CANCEL
             }
             if (choice == DebugChoice.CANCEL) bringAppToFront()
             return choice
         }
+    }
+
+    /**
+     * Resumo do processamento, sempre as ultimas linhas do log: salas (sessoes
+     * `Resultado` iniciadas), tempo total em HH:MM:SS e cliques enviados.
+     */
+    private fun logSummary(stats: SessionRunner.RunStats) {
+        log.addError("Total de salas", stats.resultadoSessions.toString())
+        log.addError("Tempo total", formatElapsed(stats.elapsedMs))
+        log.addError("Quantidade de cliques", stats.clicksSent.toString())
+    }
+
+    private fun formatElapsed(ms: Long): String {
+        val totalSeconds = ms / 1000
+        return "%02d:%02d:%02d".format(
+            totalSeconds / 3600,
+            (totalSeconds % 3600) / 60,
+            totalSeconds % 60
+        )
     }
 
     /** Traz a tela do app de volta ao primeiro plano depois do Cancel do modo debug. */
@@ -370,7 +451,7 @@ class ClickAccessibilityService : AccessibilityService() {
             startActivity(intent)
         } catch (e: RuntimeException) {
             Log.e(TAG, "Falha ao trazer o app para o primeiro plano", e)
-            log.add("Debug", "nao foi possivel trazer o app para o primeiro plano")
+            log.addError("Debug", "nao foi possivel trazer o app para o primeiro plano")
         }
     }
 
@@ -384,6 +465,7 @@ class ClickAccessibilityService : AccessibilityService() {
         stop()
         mainHandler.removeCallbacksAndMessages(null)
         debugOverlay.hide()
+        highlightOverlay.hide()
         synchronized(this) {
             runnerExecutor.shutdownNow()
             captureExecutor.shutdownNow()

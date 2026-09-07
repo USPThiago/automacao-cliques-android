@@ -9,15 +9,27 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Arquivos de sessao em `Android/data/<pacote>/files/sessions/`, no mesmo modelo
- * dos templates: podem ser enviados por `adb push` ou por um gerenciador de
+ * Arquivos de sessao em `Android/data/<pacote>/files/sessions/` — ou em
+ * `sessions_teste/` quando o modo teste esta ligado —, no mesmo modelo dos
+ * templates: podem ser enviados por `adb push` ou por um gerenciador de
  * arquivos, sem recompilar o app.
  */
-class SessionStore(private val context: Context) : SessionSource {
+class SessionStore(
+    private val context: Context,
+    /**
+     * Modo fixo (normal/teste). `null` acompanha a preferencia atual; a
+     * execucao passa um valor para nao trocar de pasta no meio do roteiro.
+     */
+    private val testMode: Boolean? = null
+) : SessionSource {
 
-    /** Diretorio das sessoes, criado se ainda nao existir. */
-    fun directory(): File =
-        File(context.getExternalFilesDir(null), DIRECTORY_NAME).apply { mkdirs() }
+    private val prefs by lazy { AppPreferences(context) }
+
+    /** Diretorio das sessoes do modo atual, criado se ainda nao existir. */
+    fun directory(): File = File(
+        context.getExternalFilesDir(null),
+        if (testMode ?: prefs.testMode) TEST_DIRECTORY_NAME else DIRECTORY_NAME
+    ).apply { mkdirs() }
 
     override fun read(fileName: String): String? {
         val file = File(directory(), fileName)
@@ -35,6 +47,7 @@ class SessionStore(private val context: Context) : SessionSource {
 
     private companion object {
         const val DIRECTORY_NAME = "sessions"
+        const val TEST_DIRECTORY_NAME = "sessions_teste"
     }
 }
 
@@ -51,9 +64,16 @@ fun screenSizeOf(context: Context): Size {
     return Size(metrics.widthPixels, metrics.heightPixels)
 }
 
-/** Valida o roteiro instalado no aparelho (arquivos de sessao + templates). */
-fun validateInstalledSessions(context: Context): SessionLoad = SessionValidator.load(
-    source = SessionStore(context),
-    templates = TemplateStore(context)::sizeOf,
-    screen = screenSizeOf(context)
-)
+/**
+ * Valida o roteiro instalado no aparelho (arquivos de sessao + templates).
+ * O modo teste e lido uma so vez, para que a validacao nunca misture as
+ * duas pastas se o toggle mudar no meio da leitura.
+ */
+fun validateInstalledSessions(context: Context): SessionLoad {
+    val testMode = AppPreferences(context).testMode
+    return SessionValidator.load(
+        source = SessionStore(context, testMode),
+        templates = TemplateStore(context, testMode)::sizeOf,
+        screen = screenSizeOf(context)
+    )
+}

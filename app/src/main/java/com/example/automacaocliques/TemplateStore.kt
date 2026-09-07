@@ -11,20 +11,32 @@ class Template(val name: String, val image: GrayImage)
 
 /**
  * Carrega os recortes usados no reconhecimento visual. Os arquivos PNG/JPG ficam
- * em `Android/data/<pacote>/files/templates/` no armazenamento do aparelho, de
- * modo que podem ser enviados por `adb push` ou por um gerenciador de arquivos
- * sem precisar recompilar o app.
+ * em `Android/data/<pacote>/files/templates/` — ou em `templates_teste/` quando
+ * o modo teste esta ligado — no armazenamento do aparelho, de modo que podem
+ * ser enviados por `adb push` ou por um gerenciador de arquivos sem precisar
+ * recompilar o app.
  *
  * O cache e sincronizado porque o carregamento acontece na thread de visao e a
  * invalidacao vem da interface.
  */
-class TemplateStore(private val context: Context) {
+class TemplateStore(
+    private val context: Context,
+    /**
+     * Modo fixo (normal/teste). `null` acompanha a preferencia atual; a
+     * execucao passa um valor para nao trocar de pasta no meio do roteiro.
+     */
+    private val testMode: Boolean? = null
+) {
+
+    private val prefs by lazy { AppPreferences(context) }
 
     private val cache = mutableMapOf<String, Template?>()
 
-    /** Diretorio dos templates, criado se ainda nao existir. */
-    fun directory(): File =
-        File(context.getExternalFilesDir(null), DIRECTORY_NAME).apply { mkdirs() }
+    /** Diretorio dos templates do modo atual, criado se ainda nao existir. */
+    fun directory(): File = File(
+        context.getExternalFilesDir(null),
+        if (testMode ?: prefs.testMode) TEST_DIRECTORY_NAME else DIRECTORY_NAME
+    ).apply { mkdirs() }
 
     /** Nomes disponiveis (nome do arquivo sem extensao, em minusculas). */
     fun names(): List<String> = files().map { it.nameWithoutExtension.lowercase() }.sorted()
@@ -85,6 +97,7 @@ class TemplateStore(private val context: Context) {
     companion object {
         private const val TAG = ClickAccessibilityService.TAG
         private const val DIRECTORY_NAME = "templates"
+        private const val TEST_DIRECTORY_NAME = "templates_teste"
         private val SUPPORTED_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp")
     }
 }

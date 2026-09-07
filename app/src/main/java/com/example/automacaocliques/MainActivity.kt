@@ -43,12 +43,29 @@ class MainActivity : AppCompatActivity() {
             prefs.debugEnabled = checked
             log.add("Modo debug", if (checked) "ligado" else "desligado")
         }
+        binding.highlightsSwitch.isChecked = prefs.highlightsEnabled
+        binding.highlightsSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.highlightsEnabled = checked
+            log.add("Retangulos", if (checked) "ligados" else "desligados")
+        }
+        log.enabled = prefs.logEnabled
+        binding.logSwitch.isChecked = prefs.logEnabled
+        binding.logSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.logEnabled = checked
+            log.enabled = checked
+            log.add("Gravacao do log", if (checked) "ligada" else "desligada")
+        }
+        binding.testModeSwitch.isChecked = prefs.testMode
+        binding.testModeSwitch.setOnCheckedChangeListener { _, checked ->
+            // Uma execucao em andamento nao e afetada: as pastas sao fixadas
+            // no inicio. O toggle vale para a proxima validacao/execucao.
+            prefs.testMode = checked
+            showPaths()
+            validateLoad()
+            log.add("Modo teste", if (checked) "ligado" else "desligado")
+        }
 
-        binding.templatesPath.text =
-            getString(R.string.templates_dir, TemplateStore(this).directory().absolutePath)
-        binding.sessionsPath.text =
-            getString(R.string.sessions_dir, SessionStore(this).directory().absolutePath)
-
+        showPaths()
         validateLoad()
     }
 
@@ -80,9 +97,17 @@ class MainActivity : AppCompatActivity() {
             val result = validateInstalledSessions(this)
             when (result) {
                 is SessionLoad.Ok -> log.add("Carga inicial", "OK")
-                is SessionLoad.Failure -> log.add("Carga inicial", "NOK - ${result.reason}")
+                is SessionLoad.Failure -> log.addError("Carga inicial", "NOK - ${result.reason}")
             }
         }
+    }
+
+    /** Mostra os caminhos das pastas ativas (normais ou de teste). */
+    private fun showPaths() {
+        binding.templatesPath.text =
+            getString(R.string.templates_dir, TemplateStore(this).directory().absolutePath)
+        binding.sessionsPath.text =
+            getString(R.string.sessions_dir, SessionStore(this).directory().absolutePath)
     }
 
     /**

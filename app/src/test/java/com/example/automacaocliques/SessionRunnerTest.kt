@@ -30,7 +30,8 @@ class SessionRunnerTest {
         val sessions: Map<String, Session>,
         val clickOutcome: (Int) -> ClickOutcome = { ClickOutcome.COMPLETED },
         val debugEnabled: Boolean = false,
-        val debugChoice: (DebugStep) -> DebugChoice = { DebugChoice.CONTINUE }
+        val debugChoice: (DebugStep) -> DebugChoice = { DebugChoice.CONTINUE },
+        val highlightsEnabled: Boolean = false
     ) : RunnerEnvironment {
 
         val clicks = mutableListOf<Pair<Int, Int>>()
@@ -54,6 +55,16 @@ class SessionRunnerTest {
             clicks += x.toInt() to y.toInt()
             events += "clique"
             return clickOutcome(clicks.size - 1)
+        }
+
+        override fun highlightsEnabled(): Boolean = highlightsEnabled
+
+        override fun showHighlight(search: Area, match: Area) {
+            events += "retangulos"
+        }
+
+        override fun hideHighlights() {
+            events += "esconde-retangulos"
         }
 
         override fun debugEnabled(): Boolean = debugEnabled
@@ -234,6 +245,165 @@ class SessionRunnerTest {
         assertEquals(
             listOf("Clique: x=10,y=20", "Clique: x=30,y=40"),
             lines.filter { it.startsWith("Clique: ") }
+        )
+    }
+
+    @Test
+    fun `acoes nao localizadas nao geram linhas no log`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_b")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        val main = session(
+            "menu",
+            action("primeira", "alvo_a"),
+            action("segunda", "alvo_b")
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
+        val lines = log.lines()
+        assertTrue(lines.toString(), lines.none { it.startsWith("Acao primeira") })
+        assertTrue(lines.toString(), lines.none { it == "Acao: primeira" })
+        assertTrue(lines.toString(), lines.none { it.contains("nao localizada") })
+        // A acao localizada continua registrada, junto das linhas da tentativa.
+        assertTrue(lines.toString(), lines.contains("Acao: segunda"))
+        assertTrue(lines.toString(), lines.contains("Sessao: menu"))
+        assertTrue(lines.toString(), lines.any { it.startsWith("Tentativa: ") })
+        assertTrue(lines.toString(), lines.any { it.startsWith("Tempo captura: ") })
+        assertTrue(lines.toString(), lines.any { it.startsWith("Tempo localizacao: ") })
+        // As linhas de tempo por sessao/acao foram retiradas.
+        assertTrue(lines.toString(), lines.none { it.startsWith("Tempo acao: ") })
+        assertTrue(lines.toString(), lines.none { it.startsWith("Tempo total: ") })
+    }
+
+    @Test
+    fun `acao localizada registra o intervalo desde o ultimo clique`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB)
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(sessionA, env.sessions))
+        val intervals = log.lines().filter { it.startsWith("Tempo desde ultimo clique: ") }
+        // O primeiro clique da execucao nao tem anterior; so o segundo registra.
+        assertEquals(1, intervals.size)
+        assertTrue(intervals.single(), intervals.single().matches(Regex(".*: \\d+ ms")))
+        assertEquals(listOf("a", "b"), log.lines().filter { it.startsWith("Sessao: ") }
+            .map { it.removePrefix("Sessao: ") })
+    }
+
+    @Test
+    fun `stats conta sessoes Resultado iniciadas e cliques enviados`() {
+        val resultado = session("Resultado", action("confere", "alvo_b"))
+        val menu = session("menu", action("vai", "alvo_a", call = "resultado"))
+        val env = FakeEnv(
+            captures = mutableListOf(
+                screenWith("alvo_a"),
+                screenWith("alvo_b"),
+                screenWith()
+            ),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "resultado.json" to resultado)
+        )
+        val runner = SessionRunner(env, log)
+
+        // Resultado e iniciada uma vez e encerra o roteiro com sucesso.
+        assertEquals(RunOutcome.Success, runner.run(menu, env.sessions))
+        val stats = runner.stats()
+        assertEquals(1, stats.resultadoSessions)
+        assertEquals(2, stats.clicksSent)
+        assertTrue(stats.elapsedMs >= 0)
+    }
+
+    @Test
+    fun `log desligado suprime linhas comuns mas mantem erros`() {
+        log.enabled = false
+        try {
+            val env = FakeEnv(
+                captures = mutableListOf(Capture.Failed(2), screenWith()),
+                templates = templates(),
+                sessions = emptyMap()
+            )
+            SessionRunner(env, log).run(
+                session("menu", action("vai", "alvo_a"), retries = 1),
+                env.sessions
+            )
+
+            val lines = log.lines()
+            assertTrue(lines.toString(), lines.none { it.startsWith("Sessao: ") })
+            assertTrue(lines.toString(), lines.none { it.startsWith("Tempo captura: ") })
+            assertTrue(
+                lines.toString(),
+                lines.contains("Transicao: NOK - captura falhou (codigo=2)")
+            )
+            assertTrue(lines.toString(), lines.any { it.contains("encerrado") })
+        } finally {
+            log.enabled = true
+            log.clear()
+        }
+    }
+
+    @Test
+    fun `retangulos sao escondidos antes de cada captura`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB),
+            highlightsEnabled = true
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(sessionA, env.sessions))
+        // Cada captura acontece sem retangulos na tela; o desenho so volta
+        // depois que a acao localiza o template.
+        assertEquals(
+            listOf(
+                "esconde-retangulos", "captura", "retangulos",
+                "esconde-retangulos", "captura", "retangulos",
+                "esconde-retangulos" // fim da execucao
+            ),
+            env.events.filter { it != "clique" }
+        )
+    }
+
+    @Test
+    fun `clickArea despacha um ponto aleatorio dentro da area escalonada`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenAtDoubleResolution("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        // clickArea medida na resolucao de referencia (160x240); a tela real
+        // tem o dobro, entao a area efetiva e (20,40)-(60,120).
+        val main = Session(
+            name = "menu",
+            screen = screenSize,
+            retries = 0,
+            actions = listOf(
+                SessionAction(
+                    name = "toque",
+                    locate = "alvo_a",
+                    clickArea = Area(10, 20, 30, 60),
+                    waitAfterMs = 0
+                )
+            ),
+            fileName = "menu.json"
+        )
+
+        val outcome = SessionRunner(env, log, Random(42)).run(main, env.sessions)
+
+        assertEquals(RunOutcome.Success, outcome)
+        val (x, y) = env.clicks.single()
+        assertTrue("x=$x fora de 20..59", x in 20 until 60)
+        assertTrue("y=$y fora de 40..119", y in 40 until 120)
+        assertEquals(
+            listOf("Clique: x=$x,y=$y"),
+            log.lines().filter { it.startsWith("Clique: ") }
         )
     }
 

@@ -294,6 +294,41 @@ class SessionParserTest {
     }
 
     @Test
+    fun `le clickArea e recusa clicks junto com ela`() {
+        val session = SessionParser.parse(
+            "mainSession.json",
+            """
+            { "name": "menu", "actions": [ { "name": "a", "locate": "t",
+              "clickArea": { "left": 10, "top": 20, "right": 300, "bottom": 400 } } ] }
+            """.trimIndent()
+        )
+        assertEquals(Area(10, 20, 300, 400), session.actions.single().clickArea)
+        assertTrue(session.actions.single().clicks.isEmpty())
+
+        val error = fails(
+            "mainSession.json",
+            """
+            { "name": "menu", "actions": [ { "name": "a", "locate": "t",
+              "clicks": [ { "x": 1, "y": 2 } ],
+              "clickArea": { "left": 10, "top": 20, "right": 300, "bottom": 400 } } ] }
+            """.trimIndent()
+        )
+        assertTrue(error, error.contains("clickArea"))
+        assertTrue(error, error.contains("clicks"))
+
+        // "clicks" declarado, ainda que vazio, ja e o outro jeito de clicar.
+        val errorEmpty = fails(
+            "mainSession.json",
+            """
+            { "name": "menu", "actions": [ { "name": "a", "locate": "t",
+              "clicks": [],
+              "clickArea": { "left": 10, "top": 20, "right": 300, "bottom": 400 } } ] }
+            """.trimIndent()
+        )
+        assertTrue(errorEmpty, errorEmpty.contains("clickArea"))
+    }
+
+    @Test
     fun `recusa searchArea invertida citando os dois valores`() {
         val error = fails(
             "mainSession.json",
