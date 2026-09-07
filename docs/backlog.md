@@ -3,7 +3,12 @@
 Lista viva das atividades ainda pendentes. Ponto de partida: `main` com o **MVP 4**
 concluído (sessões em JSON, `searchArea` com escala única e early exit, interface
 intermediária com caixa de log) e os seis apontamentos do review corrigidos
-(PR [#13](https://github.com/USPThiago/automacao-cliques-android/pull/13)).
+(PR [#13](https://github.com/USPThiago/automacao-cliques-android/pull/13)). Depois
+do MVP 5 (modo debug) entraram os recursos pré-interface do
+PR [#24](https://github.com/USPThiago/automacao-cliques-android/pull/24): retângulos
+de busca/match com chave própria, `clickArea` com ponto aleatório, chaves **Gravar
+log** e **Modo teste** (`sessions_teste/` + `templates_teste/`) e o novo formato do
+log com resumo final.
 
 Como usar: cada item tem um **critério de pronto** verificável. Ao concluir um item,
 remova-o daqui (ou mova para o histórico do PR que o resolveu) e atualize o
@@ -20,12 +25,13 @@ incremento de funcionalidade; **P2** = qualidade/manutenção.
 
 ### 1. Validação end-to-end do MVP 4 em aparelho real
 
-Nada do MVP 4 foi executado em aparelho ou emulador: os 58 testes são todos JVM, com
-captura simulada. É a única pendência que pode invalidar decisões de projeto.
+Nada do MVP 4 em diante foi executado em aparelho ou emulador: os 81 testes são todos
+JVM, com captura simulada. É a única pendência que pode invalidar decisões de projeto.
 
 - Roteiro a seguir: [`docs/manual-teste-jogo.md`](manual-teste-jogo.md).
 - Conferir na caixa de log: `Carga inicial OK`, `Escala`, `Tempo captura`,
-  `Tempo localizacao`, `Tempo acao`, `Tempo total`, `Transicao OK`.
+  `Tempo localizacao`, `Tempo desde ultimo clique`, `Transicao OK` e, ao final, o
+  resumo `Total de salas` / `Tempo total` / `Quantidade de cliques`.
 - Registrar os tempos medidos (captura e localização, com e sem `searchArea`) para
   comparar com a expectativa de ganho de ~7x da escala única.
 - **Pronto quando**: um ciclo de pelo menos duas sessões (com `call` de volta) roda no
