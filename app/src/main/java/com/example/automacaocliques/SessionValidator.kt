@@ -102,7 +102,9 @@ object SessionValidator {
             }
             if (action.clickArea != null) {
                 val clickArea = scale.scale(action.clickArea)
-                if (clickArea.right > screen.width || clickArea.bottom > screen.height) {
+                if (clickArea.width <= 0 || clickArea.height <= 0 ||
+                    clickArea.right > screen.width || clickArea.bottom > screen.height
+                ) {
                     return "$label: clickArea ${clickArea.describe()} fora da tela ${screen.describe()}"
                 }
             }

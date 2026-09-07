@@ -19,16 +19,23 @@ class Template(val name: String, val image: GrayImage)
  * O cache e sincronizado porque o carregamento acontece na thread de visao e a
  * invalidacao vem da interface.
  */
-class TemplateStore(private val context: Context) {
+class TemplateStore(
+    private val context: Context,
+    /**
+     * Modo fixo (normal/teste). `null` acompanha a preferencia atual; a
+     * execucao passa um valor para nao trocar de pasta no meio do roteiro.
+     */
+    private val testMode: Boolean? = null
+) {
 
-    private val prefs = AppPreferences(context)
+    private val prefs by lazy { AppPreferences(context) }
 
     private val cache = mutableMapOf<String, Template?>()
 
     /** Diretorio dos templates do modo atual, criado se ainda nao existir. */
     fun directory(): File = File(
         context.getExternalFilesDir(null),
-        if (prefs.testMode) TEST_DIRECTORY_NAME else DIRECTORY_NAME
+        if (testMode ?: prefs.testMode) TEST_DIRECTORY_NAME else DIRECTORY_NAME
     ).apply { mkdirs() }
 
     /** Nomes disponiveis (nome do arquivo sem extensao, em minusculas). */

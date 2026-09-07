@@ -315,6 +315,17 @@ class SessionParserTest {
         )
         assertTrue(error, error.contains("clickArea"))
         assertTrue(error, error.contains("clicks"))
+
+        // "clicks" declarado, ainda que vazio, ja e o outro jeito de clicar.
+        val errorEmpty = fails(
+            "mainSession.json",
+            """
+            { "name": "menu", "actions": [ { "name": "a", "locate": "t",
+              "clicks": [],
+              "clickArea": { "left": 10, "top": 20, "right": 300, "bottom": 400 } } ] }
+            """.trimIndent()
+        )
+        assertTrue(errorEmpty, errorEmpty.contains("clickArea"))
     }
 
     @Test

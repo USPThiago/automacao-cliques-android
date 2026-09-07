@@ -30,7 +30,8 @@ class SessionRunnerTest {
         val sessions: Map<String, Session>,
         val clickOutcome: (Int) -> ClickOutcome = { ClickOutcome.COMPLETED },
         val debugEnabled: Boolean = false,
-        val debugChoice: (DebugStep) -> DebugChoice = { DebugChoice.CONTINUE }
+        val debugChoice: (DebugStep) -> DebugChoice = { DebugChoice.CONTINUE },
+        val highlightsEnabled: Boolean = false
     ) : RunnerEnvironment {
 
         val clicks = mutableListOf<Pair<Int, Int>>()
@@ -54,6 +55,16 @@ class SessionRunnerTest {
             clicks += x.toInt() to y.toInt()
             events += "clique"
             return clickOutcome(clicks.size - 1)
+        }
+
+        override fun highlightsEnabled(): Boolean = highlightsEnabled
+
+        override fun showHighlight(search: Area, match: Area) {
+            events += "retangulos"
+        }
+
+        override fun hideHighlights() {
+            events += "esconde-retangulos"
         }
 
         override fun debugEnabled(): Boolean = debugEnabled
@@ -334,6 +345,30 @@ class SessionRunnerTest {
             log.enabled = true
             log.clear()
         }
+    }
+
+    @Test
+    fun `retangulos sao escondidos antes de cada captura`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB),
+            highlightsEnabled = true
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(sessionA, env.sessions))
+        // Cada captura acontece sem retangulos na tela; o desenho so volta
+        // depois que a acao localiza o template.
+        assertEquals(
+            listOf(
+                "esconde-retangulos", "captura", "retangulos",
+                "esconde-retangulos", "captura", "retangulos",
+                "esconde-retangulos" // fim da execucao
+            ),
+            env.events.filter { it != "clique" }
+        )
     }
 
     @Test

@@ -121,7 +121,7 @@ object SessionParser {
         val clickArea = obj.entries["clickArea"]?.let {
             readArea(fileName, "$prefix.clickArea", it)
         }
-        if (clickArea != null && clicks.isNotEmpty()) {
+        if (clickArea != null && obj.entries.containsKey("clicks")) {
             fail(
                 fileName,
                 "$prefix.clickArea",

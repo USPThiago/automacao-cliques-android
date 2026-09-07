@@ -45,11 +45,11 @@ class ClickAccessibilityService : AccessibilityService() {
     @Volatile
     private var captureExecutor = Executors.newSingleThreadExecutor()
 
-    /** Recortes usados no reconhecimento visual das telas. */
-    val templates: TemplateStore by lazy { TemplateStore(this) }
-
-    /** Arquivos de sessao em `files/sessions/`. */
-    val sessions: SessionStore by lazy { SessionStore(this) }
+    /**
+     * Stores da execucao corrente, presos ao modo (normal/teste) vigente no
+     * inicio: trocar o toggle no meio do roteiro nao muda as pastas em uso.
+     */
+    private var runTemplates: TemplateStore? = null
 
     private val running = AtomicBoolean(false)
 
@@ -92,21 +92,22 @@ class ClickAccessibilityService : AccessibilityService() {
             return false
         }
         stopRequested.set(false)
-        templates.invalidate()
         ensureExecutors()
         // Lidas uma vez por execucao, para nao pagar I/O a cada acao.
         val debugEnabled = prefs.debugEnabled
         val highlightsEnabled = prefs.highlightsEnabled
+        val testMode = prefs.testMode
         log.enabled = prefs.logEnabled
         runnerExecutor.execute {
             try {
-                execute(debugEnabled, highlightsEnabled)
+                execute(debugEnabled, highlightsEnabled, testMode)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro inesperado durante execucao", e)
                 log.addError("Execucao", "erro inesperado: ${e.message}")
             } finally {
                 running.set(false)
                 runner = null
+                runTemplates = null
             }
         }
         return true
@@ -120,7 +121,8 @@ class ClickAccessibilityService : AccessibilityService() {
         mainHandler.post { debugOverlay.dismiss() }
     }
 
-    private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean) {
+    private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean, testMode: Boolean) {
+        runTemplates = TemplateStore(this, testMode)
         if (!awaitForeignForeground()) {
             if (stopRequested.get()) {
                 log.addError("Execucao", "parada")
@@ -133,7 +135,12 @@ class ClickAccessibilityService : AccessibilityService() {
         // orientacao usadas nela precisam ser as do app alvo, e nao as da
         // interface de automacao, que e sempre paisagem.
         val screen = screenSize()
-        when (val load = SessionValidator.load(sessions, templates::sizeOf, screen)) {
+        val load = SessionValidator.load(
+            SessionStore(this, testMode),
+            checkNotNull(runTemplates)::sizeOf,
+            screen
+        )
+        when (load) {
             is SessionLoad.Failure -> {
                 log.addError("Carga inicial", "NOK - ${load.reason}")
                 return
@@ -142,8 +149,14 @@ class ClickAccessibilityService : AccessibilityService() {
                 log.add("Carga inicial", "OK")
                 if (debugEnabled) log.add("Modo debug", "ligado")
                 if (highlightsEnabled) log.add("Retangulos", "ligados")
-                val sessionRunner =
-                    SessionRunner(ServiceEnvironment(debugEnabled, highlightsEnabled), log)
+                val sessionRunner = SessionRunner(
+                    ServiceEnvironment(
+                        debugEnabled,
+                        highlightsEnabled,
+                        checkNotNull(runTemplates)
+                    ),
+                    log
+                )
                 runner = sessionRunner
                 // Parada pedida enquanto o executor era criado ou durante a
                 // validacao: o cancelamento e transferido para ele.
@@ -272,7 +285,8 @@ class ClickAccessibilityService : AccessibilityService() {
     /** Ponte entre o executor de sessoes e as APIs do aparelho. */
     private inner class ServiceEnvironment(
         private val debugEnabled: Boolean,
-        private val highlightsEnabled: Boolean
+        private val highlightsEnabled: Boolean,
+        private val templates: TemplateStore
     ) : RunnerEnvironment {
 
         override fun capture(): Capture {
@@ -343,8 +357,21 @@ class ClickAccessibilityService : AccessibilityService() {
             mainHandler.post { highlightOverlay.show(search, match) }
         }
 
+        /**
+         * Remove os retangulos e so retorna quando ja sairam da tela: a
+         * proxima captura nao pode enxerga-los.
+         */
         override fun hideHighlights() {
-            mainHandler.post { highlightOverlay.hide() }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                highlightOverlay.hide()
+                return
+            }
+            val removed = CountDownLatch(1)
+            mainHandler.post {
+                highlightOverlay.hide()
+                removed.countDown()
+            }
+            removed.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         }
 
         /**

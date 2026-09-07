@@ -140,7 +140,7 @@ class SessionRunner(
             log.addError("Execucao", reason)
             RunOutcome.Failure(reason)
         } finally {
-            env.hideHighlights()
+            if (env.highlightsEnabled()) env.hideHighlights()
         }
     }
 
@@ -210,6 +210,9 @@ class SessionRunner(
     }
 
     private fun attempt(session: Session, attempt: Int): AttemptOutcome {
+        // Os retangulos nao podem aparecer na captura: tiram-se antes e o
+        // proximo match os desenha de novo.
+        if (env.highlightsEnabled()) env.hideHighlights()
         val captureStart = env.elapsedMs()
         val capture = env.capture()
         log.add("Tempo captura", "${env.elapsedMs() - captureStart} ms")

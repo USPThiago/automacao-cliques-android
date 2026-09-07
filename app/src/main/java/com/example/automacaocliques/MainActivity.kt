@@ -57,8 +57,9 @@ class MainActivity : AppCompatActivity() {
         }
         binding.testModeSwitch.isChecked = prefs.testMode
         binding.testModeSwitch.setOnCheckedChangeListener { _, checked ->
+            // Uma execucao em andamento nao e afetada: as pastas sao fixadas
+            // no inicio. O toggle vale para a proxima validacao/execucao.
             prefs.testMode = checked
-            ClickAccessibilityService.instance?.templates?.invalidate()
             showPaths()
             validateLoad()
             log.add("Modo teste", if (checked) "ligado" else "desligado")
