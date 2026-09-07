@@ -146,7 +146,9 @@ clique; qualquer falha impede o inicio e o log indica o arquivo e o campo:
 
 ## Interface
 
-A tela do app e apenas o painel de controle (paisagem fixa):
+A tela do app e apenas o painel de controle (paisagem fixa, em duas colunas:
+controles a esquerda — rolaveis se a tela for baixa — e log a direita, sempre
+visivel):
 
 - status do servico e atalho para as configuracoes de acessibilidade;
 - caminhos de `templates/` e `sessions/` (ou `templates_teste/` e
