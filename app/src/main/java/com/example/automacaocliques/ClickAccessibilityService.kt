@@ -88,7 +88,7 @@ class ClickAccessibilityService : AccessibilityService() {
      */
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) {
-            log.add("Execucao", "ja existe uma execucao em andamento")
+            log.addError("Execucao", "ja existe uma execucao em andamento")
             return false
         }
         stopRequested.set(false)
@@ -97,12 +97,13 @@ class ClickAccessibilityService : AccessibilityService() {
         // Lidas uma vez por execucao, para nao pagar I/O a cada acao.
         val debugEnabled = prefs.debugEnabled
         val highlightsEnabled = prefs.highlightsEnabled
+        log.enabled = prefs.logEnabled
         runnerExecutor.execute {
             try {
                 execute(debugEnabled, highlightsEnabled)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro inesperado durante execucao", e)
-                log.add("Execucao", "erro inesperado: ${e.message}")
+                log.addError("Execucao", "erro inesperado: ${e.message}")
             } finally {
                 running.set(false)
                 runner = null
@@ -122,9 +123,9 @@ class ClickAccessibilityService : AccessibilityService() {
     private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean) {
         if (!awaitForeignForeground()) {
             if (stopRequested.get()) {
-                log.add("Execucao", "parada")
+                log.addError("Execucao", "parada")
             } else {
-                log.add("Transicao", "NOK - app em primeiro plano")
+                log.addError("Transicao", "NOK - app em primeiro plano")
             }
             return
         }
@@ -134,7 +135,7 @@ class ClickAccessibilityService : AccessibilityService() {
         val screen = screenSize()
         when (val load = SessionValidator.load(sessions, templates::sizeOf, screen)) {
             is SessionLoad.Failure -> {
-                log.add("Carga inicial", "NOK - ${load.reason}")
+                log.addError("Carga inicial", "NOK - ${load.reason}")
                 return
             }
             is SessionLoad.Ok -> {
@@ -148,10 +149,12 @@ class ClickAccessibilityService : AccessibilityService() {
                 // validacao: o cancelamento e transferido para ele.
                 if (stopRequested.get()) sessionRunner.cancel()
                 when (val outcome = sessionRunner.run(load.main, load.sessions)) {
-                    RunOutcome.Success -> log.add("Execucao", "concluida com sucesso")
-                    RunOutcome.Cancelled -> log.add("Execucao", "parada")
-                    is RunOutcome.Failure -> log.add("Execucao", "encerrada: ${outcome.reason}")
+                    RunOutcome.Success -> log.addError("Execucao", "concluida com sucesso")
+                    RunOutcome.Cancelled -> log.addError("Execucao", "parada")
+                    is RunOutcome.Failure ->
+                        log.addError("Execucao", "encerrada: ${outcome.reason}")
                 }
+                logSummary(sessionRunner.stats())
             }
         }
     }
@@ -373,12 +376,31 @@ class ClickAccessibilityService : AccessibilityService() {
             // A proxima captura so pode acontecer com a sobreposicao ja removida.
             hidden.await(GESTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             if (!answered) {
-                log.add("Debug", "sem resposta - execucao parada")
+                log.addError("Debug", "sem resposta - execucao parada")
                 return DebugChoice.CANCEL
             }
             if (choice == DebugChoice.CANCEL) bringAppToFront()
             return choice
         }
+    }
+
+    /**
+     * Resumo do processamento, sempre as ultimas linhas do log: salas (sessoes
+     * `Resultado` iniciadas), tempo total em HH:MM:SS e cliques enviados.
+     */
+    private fun logSummary(stats: SessionRunner.RunStats) {
+        log.addError("Total de salas", stats.resultadoSessions.toString())
+        log.addError("Tempo total", formatElapsed(stats.elapsedMs))
+        log.addError("Quantidade de cliques", stats.clicksSent.toString())
+    }
+
+    private fun formatElapsed(ms: Long): String {
+        val totalSeconds = ms / 1000
+        return "%02d:%02d:%02d".format(
+            totalSeconds / 3600,
+            (totalSeconds % 3600) / 60,
+            totalSeconds % 60
+        )
     }
 
     /** Traz a tela do app de volta ao primeiro plano depois do Cancel do modo debug. */
@@ -389,7 +411,7 @@ class ClickAccessibilityService : AccessibilityService() {
             startActivity(intent)
         } catch (e: RuntimeException) {
             Log.e(TAG, "Falha ao trazer o app para o primeiro plano", e)
-            log.add("Debug", "nao foi possivel trazer o app para o primeiro plano")
+            log.addError("Debug", "nao foi possivel trazer o app para o primeiro plano")
         }
     }
 
