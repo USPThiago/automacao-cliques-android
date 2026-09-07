@@ -162,7 +162,9 @@ A tela do app e apenas o painel de controle (paisagem fixa):
 **Retangulos na tela**: durante a execucao, desenha em amarelo a `searchArea`
 onde o template foi pesquisado (tela inteira quando a acao nao declara uma) e
 em vermelho a regiao exata onde ele foi localizado. Cada acao localizada
-substitui o desenho anterior, removido ao encerrar. Nao pausa a execucao.
+substitui o desenho anterior, removido ao encerrar. Os retangulos sao
+escondidos durante cada captura para nao contaminar o casamento. Nao pausa a
+execucao.
 
 **Gravar log**: desligada, a caixa de log deixa de gravar as linhas comuns;
 o Logcat e as linhas de erro/resultado continuam sempre.
@@ -170,15 +172,17 @@ o Logcat e as linhas de erro/resultado continuam sempre.
 **Modo teste**: le sessoes e templates das pastas `sessions_teste/` e
 `templates_teste/`, ao lado das originais. Permite ajustar e testar roteiros
 sem sobrescrever a versao em uso; ao alternar, a carga e revalidada e os
-caminhos exibidos mudam.
+caminhos exibidos mudam. O par de pastas e fixado no inicio de cada execucao:
+alternar no meio do roteiro so vale para a proxima.
 
 Rotulos do log: `Carga inicial`, `Sessao`, `Tentativa`, `Acao`, `Escala`,
 `Tempo captura`, `Tempo localizacao`, `Tempo desde ultimo clique`,
 `Resolucao da tela`, `Posicao`, `Clique`, `Transicao`, `Debug`. Acoes que nao
 localizam o template nao geram linhas. Ao encerrar (sucesso, falha ou
-cancelamento), o log termina com o resumo: `Total de salas` (sessoes chamadas
-`Resultado` iniciadas), `Tempo total` (HH:MM:SS do inicio ao fim do
-processamento) e `Quantidade de cliques`.
+cancelamento — inclusive falhas antes do roteiro existir), o log termina com o
+resumo: `Total de salas` (sessoes chamadas `Resultado` iniciadas), `Tempo
+total` (HH:MM:SS do inicio ao fim do processamento) e `Quantidade de cliques`
+(apenas gestos aceitos pelo sistema; um toque rejeitado nao entra na conta).
 
 ## Modo debug
 

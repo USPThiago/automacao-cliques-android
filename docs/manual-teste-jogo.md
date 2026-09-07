@@ -276,13 +276,22 @@ Escala: 1.000 (sem referencia)
 Posicao: left=727,top=1381,right=897,bottom=1552
 Clique: x=812,y=1466
 Transicao: OK
+Execucao: concluida com sucesso
+Total de salas: 0
+Tempo total: 00:00:02
+Quantidade de cliques: 1
 ```
 
-Se a ação não for localizada, o log traz o melhor escore obtido:
+`Tempo desde ultimo clique` aparece antes do `Clique` sempre que houve um clique
+anterior na execução (no primeiro clique a linha é omitida). As três linhas finais
+(`Total de salas`, `Tempo total` em HH:MM:SS e `Quantidade de cliques`) encerram o log
+em **qualquer** encerramento — sucesso, falha ou cancelamento, inclusive quando a
+execução morre na carga inicial.
 
-```text
-Acao achar loja: nao localizada (melhor escore=0.412, limite=0.80)
-```
+Ações que **não** localizam o template não geram linhas: entre uma `Tentativa` e a
+próxima só aparecem `Tempo captura`/`Resolucao da tela` se nada foi localizado. Quando
+a sessão esgota as tentativas, o erro `Sessao <nome>: nenhuma acao localizada em N
+tentativa(s) - encerrado` marca o fim do roteiro.
 
 Interpretação dos escores (vão de -1 a 1; o limite padrão para clicar é **0.80**):
 
@@ -335,6 +344,9 @@ O JSON não aceita comentários; os `//` abaixo são só para leitura.
         { "x": 980, "y": 220 },
         { "x": 540, "y": 1800, "delayMs": 500 } // delayMs do ponto tem precedência sobre clickIntervalMs
       ],
+      // "clickArea": { "left": 900, "top": 150,   // alternativa a "clicks": um único toque em
+      //              "right": 1060, "bottom": 300 }, // ponto aleatório dentro da área;
+      //                                              // declarar "clicks" (mesmo vazio) junto é erro
       "clickIntervalMs": 300,                   // espera entre cliques; padrão 300
       "waitAfterMs": 1000,                      // espera após o último clique; padrão 1000
       "call": "menu_principal"                  // próxima sessão: sessions/menu_principal.json
@@ -383,9 +395,9 @@ cliques e, **antes** de passar para a sessão do `call`, mostra um popup por cim
 - `Clique`: a coordenada real de cada toque, na ordem em que saíram;
 - `Proxima sessao`: para onde o roteiro vai seguir.
 
-Na própria tela do jogo aparece um retângulo amarelo em volta do template e uma cruz
-vermelha em cada ponto clicado: é a forma mais rápida de ver se o toque caiu no botão certo.
-O card fica na metade da tela oposta ao clique para não cobrir o marcador.
+Na própria tela do jogo aparece um retângulo amarelo em volta do template — não há
+marcador sobre os pontos clicados. O card fica na metade da tela oposta ao clique para
+não cobrir a região localizada.
 
 - **OK** segue o roteiro (o `waitAfterMs` conta a partir daí).
 - **Cancel** interrompe tudo e traz a tela do app de volta, com o log da execução.
@@ -399,9 +411,24 @@ Use-o para:
 3. seguir o grafo sessão a sessão, checando cada `call`.
 
 O popup aparece **uma vez por ação**, mesmo com vários `clicks`, e só para ações que
-localizaram o template; tentativas que não achavam nada continuam apenas no log. Se o popup
-ficar 5 minutos sem resposta, a execução é cancelada. Desligue a chave quando o roteiro
-estiver conferido.
+localizaram o template; tentativas que não acham nada não geram linhas de ação no log.
+Se o popup ficar 5 minutos sem resposta, a execução é cancelada. Desligue a chave quando
+o roteiro estiver conferido.
+
+### 5.2.2 Outras chaves da tela
+
+- **Retangulos na tela**: durante a execução normal (sem pausar), desenha em amarelo a
+  `searchArea` onde o template está sendo pesquisado (tela inteira quando a ação não
+  declara uma) e em vermelho a região exata onde ele foi localizado. Cada ação
+  localizada substitui o desenho anterior, removido ao encerrar — e os retângulos são
+  escondidos durante cada captura para não contaminar o casamento. Padrão: desligada.
+- **Gravar log**: desligada, a caixa de log deixa de gravar as linhas comuns; o Logcat e
+  as linhas de erro/resultado continuam sempre. Padrão: ligada.
+- **Modo teste**: passa a ler sessões e templates de `sessions_teste/` e
+  `templates_teste/`, ao lado das pastas originais — útil para testar ajustes sem
+  sobrescrever a versão em uso. O par de pastas é fixado no início de cada execução:
+  alternar a chave no meio de um roteiro só vale para a próxima execução. Ao alternar,
+  a carga é revalidada e os caminhos exibidos na tela mudam. Padrão: desligada.
 
 ### 5.3 Validação da carga inicial
 
@@ -412,6 +439,8 @@ Antes de começar, o app confere tudo e recusa a execução com o arquivo e o ca
 - todo `call` aponta para um arquivo existente em `sessions/`;
 - todo `locate` tem imagem correspondente em `templates/`;
 - `searchArea` tem os quatro campos, `right > left`, `bottom > top` e cabe na tela;
+- `clickArea` segue as mesmas regras (inclusive não colapsar pela escala) e não pode
+  vir junto com `clicks`;
 - o template cabe na `searchArea` depois do escalonamento;
 - `threshold` entre 0.0 e 1.0; tempos e `retries` não negativos e sem frações.
 
@@ -436,8 +465,8 @@ completo do campo e o valor recebido.
 - `searchArea` é o que mais economiza tempo: o casamento roda só sobre o recorte.
 - `scales` com um único valor (padrão) é ~7x mais rápido que a lista completa do MVP 3.5.
 - A busca para assim que encontra um escore ≥ 0.95 (ou ≥ `threshold`, se ele for maior).
-- `Tempo captura`, `Tempo localizacao`, `Tempo acao` e `Tempo total` aparecem no log: use-os
-  para ajustar `searchArea` e `scales`.
+- `Tempo captura`, `Tempo localizacao` e `Tempo desde ultimo clique` aparecem no log
+  (nas ações localizadas): use-os para ajustar `searchArea` e `scales`.
 
 ### Limitações que você vai encontrar (são reais, não bugs)
 
@@ -463,7 +492,7 @@ completo do campo e o valor recebido.
 | `Carga inicial: NOK - <arquivo>:<linha>:<coluna>: campo '...'` | erro de digitação no JSON | abra o arquivo na linha indicada e corrija o campo/valor citado |
 | `Carga inicial: NOK - <arquivo>:<linha>:<coluna>: JSON invalido ...` | vírgula, chave ou aspas faltando | corrija a sintaxe na linha/coluna indicada |
 | `Carga inicial: NOK - ...: template 'x' nao encontrado em templates/` | nome/extensão diferente ou arquivo ausente | confira com `adb shell ls` (seção 4.5) |
-| `Acao ...: nao localizada (melhor escore=0.4..., limite=0.80)` | recorte com área animada, tela errada, ou jogo em outra resolução | recorte menor e centrado no ícone estável; refaça a captura no próprio aparelho |
+| A `Tentativa` se repete sem linhas de ação e a sessão termina com `nenhuma acao localizada` | recorte com área animada, tela errada, ou jogo em outra resolução | recorte menor e centrado no ícone estável; refaça a captura no próprio aparelho |
 | `Transicao NOK - app em primeiro plano` | o jogo não chegou ao primeiro plano em 15 s | depois de tocar em Iniciar, troque para o jogo dentro dos 15 s; evite que ele seja descarregado da memória |
 | `Transicao NOK - captura falhou (codigo=...)` | jogo com bloqueio de captura (`FLAG_SECURE`) | nada a fazer no app se o conteúdo for protegido |
 | `Captura de tela exige Android 11 (API 30)` | aparelho antigo | o app não funciona nesse aparelho |
