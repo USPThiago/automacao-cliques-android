@@ -17,8 +17,8 @@ import com.example.automacaocliques.databinding.DebugOverlayBinding
  * Sobreposicao do modo debug, criada pelo proprio servico de acessibilidade
  * ([WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY]) porque durante a
  * execucao a Activity esta em segundo plano. Em tela cheia desenha o retangulo
- * do template e um marcador em cada clique; o card com os dados fica na metade
- * da tela oposta ao clique. Todos os metodos devem rodar na thread principal.
+ * do template; o card com os dados fica na metade da tela oposta ao clique.
+ * Todos os metodos devem rodar na thread principal.
  */
 class DebugOverlay(private val context: Context) {
 
@@ -107,7 +107,7 @@ class DebugOverlay(private val context: Context) {
         }
     }
 
-    /** Fundo escurecido, retangulo do template e marcador de cada clique. */
+    /** Fundo escurecido e retangulo do template localizado. */
     private class MarkerView(context: Context, private val step: DebugStep) : View(context) {
 
         private val density = context.resources.displayMetrics.density
@@ -120,12 +120,6 @@ class DebugOverlay(private val context: Context) {
             color = Color.YELLOW
         }
 
-        private val clickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 3 * density
-            color = Color.RED
-        }
-
         override fun onDraw(canvas: Canvas) {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
             val match = step.match
@@ -136,15 +130,6 @@ class DebugOverlay(private val context: Context) {
                 match.bottom.toFloat(),
                 matchPaint
             )
-            val radius = 16 * density
-            val arm = 24 * density
-            step.clicks.forEach { click ->
-                val x = click.x.toFloat()
-                val y = click.y.toFloat()
-                canvas.drawCircle(x, y, radius, clickPaint)
-                canvas.drawLine(x - arm, y, x + arm, y, clickPaint)
-                canvas.drawLine(x, y - arm, x, y + arm, clickPaint)
-            }
         }
     }
 }
