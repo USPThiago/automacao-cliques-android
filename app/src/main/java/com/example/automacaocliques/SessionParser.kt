@@ -114,8 +114,21 @@ object SessionParser {
             }
         }
 
-        val searchArea = obj.entries["searchArea"]?.let { readArea(fileName, prefix, it) }
+        val searchArea = obj.entries["searchArea"]?.let {
+            readArea(fileName, "$prefix.searchArea", it)
+        }
         val clicks = readClicks(fileName, prefix, obj.entries["clicks"])
+        val clickArea = obj.entries["clickArea"]?.let {
+            readArea(fileName, "$prefix.clickArea", it)
+        }
+        if (clickArea != null && clicks.isNotEmpty()) {
+            fail(
+                fileName,
+                "$prefix.clickArea",
+                "nao pode ser usado junto com 'clicks'",
+                obj.entries["clickArea"]
+            )
+        }
 
         return SessionAction(
             name = name,
@@ -124,6 +137,7 @@ object SessionParser {
             scales = scales,
             searchArea = searchArea,
             clicks = clicks,
+            clickArea = clickArea,
             clickIntervalMs = optionalLong(
                 fileName,
                 obj,
@@ -175,8 +189,7 @@ object SessionParser {
         }
     }
 
-    private fun readArea(fileName: String, prefix: String, value: JsonValue): Area {
-        val label = "$prefix.searchArea"
+    private fun readArea(fileName: String, label: String, value: JsonValue): Area {
         val obj = value as? JsonValue.Obj
             ?: fail(fileName, label, "esperado um objeto", value)
         val area = Area(

@@ -119,6 +119,22 @@ class SessionValidatorTest {
     }
 
     @Test
+    fun `recusa clickArea fora da tela`() {
+        val reason = reasonOf(
+            load(
+                mapOf(
+                    "mainSession.json" to """
+                        { "name": "menu", "actions": [ { "name": "a", "locate": "botao",
+                          "clickArea": { "left": 0, "top": 0, "right": 5000, "bottom": 100 } } ] }
+                    """.trimIndent()
+                )
+            )
+        )
+        assertTrue(reason, reason.contains("clickArea"))
+        assertTrue(reason, reason.contains("fora da tela"))
+    }
+
+    @Test
     fun `recusa template maior que a searchArea`() {
         val reason = reasonOf(
             load(

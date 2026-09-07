@@ -100,6 +100,12 @@ object SessionValidator {
             ) {
                 return "$label: searchArea ${area.describe()} fora da tela ${screen.describe()}"
             }
+            if (action.clickArea != null) {
+                val clickArea = scale.scale(action.clickArea)
+                if (clickArea.right > screen.width || clickArea.bottom > screen.height) {
+                    return "$label: clickArea ${clickArea.describe()} fora da tela ${screen.describe()}"
+                }
+            }
 
             val smallestScale = action.scales.min()
             val factor = scale.templateFactor * smallestScale

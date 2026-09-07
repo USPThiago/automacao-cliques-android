@@ -35,6 +35,8 @@ data class SessionAction(
     val scales: List<Double> = TemplateMatcher.DEFAULT_SCALES,
     val searchArea: Area? = null,
     val clicks: List<ClickPoint> = emptyList(),
+    /** Alternativa a [clicks]: um toque em ponto aleatorio dentro da area. */
+    val clickArea: Area? = null,
     val clickIntervalMs: Long = DEFAULT_CLICK_INTERVAL_MS,
     val waitAfterMs: Long = DEFAULT_WAIT_AFTER_MS,
     val call: String? = null,
