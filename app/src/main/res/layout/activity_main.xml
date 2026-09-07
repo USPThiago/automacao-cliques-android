@@ -59,6 +59,20 @@
         android:layout_gravity="center_horizontal"
         android:text="@string/highlights_mode" />
 
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/logSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="@string/log_mode" />
+
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/testModeSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="@string/test_mode" />
+
     <TextView
         android:id="@+id/templatesPath"
         android:layout_width="match_parent"

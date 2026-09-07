@@ -109,9 +109,12 @@ O JSON nao aceita comentarios; os `//` abaixo sao apenas explicativos.
         "right": 1080, "bottom": 500
       },
       "clicks": [                               // omita para clicar no centro do recorte encontrado
-        { "x": 980, "y": 220 },
+        { "x": 980, "y": 220 },                 // alternativa: "clickArea" (ver abaixo)
         { "x": 540, "y": 1800, "delayMs": 500 } // delayMs do ponto tem precedencia sobre clickIntervalMs
       ],
+      // "clickArea": { "left": 900, "top": 150,   // alternativa a "clicks": um unico toque em
+      //              "right": 1060, "bottom": 300 }, // ponto aleatorio dentro da area; nao pode
+      //                                              // ser usada junto com "clicks"
       "clickIntervalMs": 300,                   // espera entre cliques; padrao 300
       "waitAfterMs": 1000,                      // espera apos o ultimo clique; padrao 1000
       "call": "menu_principal"                  // proxima sessao: sessions/menu_principal.json
@@ -124,8 +127,8 @@ O JSON nao aceita comentarios; os `//` abaixo sao apenas explicativos.
 }
 ```
 
-Coordenadas e `searchArea` sao escalonadas de `screen` para a resolucao real do
-aparelho; sem `screen`, sao usadas como estao.
+Coordenadas de `clicks`, `clickArea` e `searchArea` sao escalonadas de `screen`
+para a resolucao real do aparelho; sem `screen`, sao usadas como estao.
 
 ### Validacao da carga inicial
 
@@ -138,6 +141,7 @@ clique; qualquer falha impede o inicio e o log indica o arquivo e o campo:
 - todo `locate` tem imagem correspondente em `templates/`;
 - `searchArea` tem os quatro campos, com `right > left`, `bottom > top`, dentro
   da tela e comportando o template depois do escalonamento;
+- `clickArea` segue as mesmas regras e nao pode aparecer junto com `clicks`;
 - `threshold` entre 0.0 e 1.0; tempos e `retries` nao negativos.
 
 ## Interface
@@ -145,17 +149,36 @@ clique; qualquer falha impede o inicio e o log indica o arquivo e o campo:
 A tela do app e apenas o painel de controle (paisagem fixa):
 
 - status do servico e atalho para as configuracoes de acessibilidade;
-- caminhos de `templates/` e `sessions/`;
+- caminhos de `templates/` e `sessions/` (ou `templates_teste/` e
+  `sessions_teste/` no modo teste);
 - **Iniciar** (valida a carga e espera ate 15 s o app alvo chegar ao primeiro
   plano antes da primeira captura; a troca de app e feita pelo usuario),
   **Parar**, **Limpar** e **Copiar**;
-- chave **Modo debug** (ver abaixo), persistida entre execucoes;
+- chaves **Modo debug** (ver abaixo), **Retangulos na tela**, **Gravar log** e
+  **Modo teste**, todas persistidas entre execucoes;
 - caixa de log com as ultimas 500 linhas, mantida pelo servico (sobrevive ao
   fechamento da tela) e espelhada no Logcat com a tag `ClickService`.
 
+**Retangulos na tela**: durante a execucao, desenha em amarelo a `searchArea`
+onde o template foi pesquisado (tela inteira quando a acao nao declara uma) e
+em vermelho a regiao exata onde ele foi localizado. Cada acao localizada
+substitui o desenho anterior, removido ao encerrar. Nao pausa a execucao.
+
+**Gravar log**: desligada, a caixa de log deixa de gravar as linhas comuns;
+o Logcat e as linhas de erro/resultado continuam sempre.
+
+**Modo teste**: le sessoes e templates das pastas `sessions_teste/` e
+`templates_teste/`, ao lado das originais. Permite ajustar e testar roteiros
+sem sobrescrever a versao em uso; ao alternar, a carga e revalidada e os
+caminhos exibidos mudam.
+
 Rotulos do log: `Carga inicial`, `Sessao`, `Tentativa`, `Acao`, `Escala`,
-`Tempo captura`, `Tempo localizacao`, `Posicao inicial`, `Posicao final`,
-`Clique`, `Transicao`, `Tempo acao`, `Tempo total`, `Debug`.
+`Tempo captura`, `Tempo localizacao`, `Tempo desde ultimo clique`,
+`Resolucao da tela`, `Posicao`, `Clique`, `Transicao`, `Debug`. Acoes que nao
+localizam o template nao geram linhas. Ao encerrar (sucesso, falha ou
+cancelamento), o log termina com o resumo: `Total de salas` (sessoes chamadas
+`Resultado` iniciadas), `Tempo total` (HH:MM:SS do inicio ao fim do
+processamento) e `Quantidade de cliques`.
 
 ## Modo debug
 
@@ -170,9 +193,9 @@ app esta em segundo plano durante a execucao). O popup traz:
 - `Clique`: as coordenadas reais de cada toque despachado, na ordem;
 - `Proxima sessao`: o `call` da acao, ou `(fim do roteiro)`.
 
-Na tela, um retangulo amarelo contorna o template e uma cruz vermelha marca cada
-clique; o card fica na metade da tela oposta aos cliques para nao cobrir o marcador.
-Ha **um unico popup por acao**, mesmo quando ela tem varios `clicks`. Os botoes:
+Na tela, um retangulo amarelo contorna o template; o card fica na metade da
+tela oposta aos cliques para nao cobrir a regiao localizada. Ha **um unico
+popup por acao**, mesmo quando ela tem varios `clicks`. Os botoes:
 
 - **OK**: espera `waitAfterMs` e segue para a proxima sessao;
 - **Cancel**: interrompe a execucao (`Debug: cancelado pelo usuario`,
@@ -196,8 +219,9 @@ funciona.
 - `searchArea` limita o casamento ao recorte informado, que e o maior ganho de
   desempenho;
 - a busca para assim que atinge escore >= 0.95;
-- os tempos de captura, localizacao, acao e total aparecem no log, medidos com
-  relogio monotonico (`SystemClock.elapsedRealtime`).
+- os tempos de captura, localizacao e o intervalo desde o ultimo clique
+  aparecem no log, medidos com relogio monotonico
+  (`SystemClock.elapsedRealtime`).
 
 ### Criando e instalando os templates
 

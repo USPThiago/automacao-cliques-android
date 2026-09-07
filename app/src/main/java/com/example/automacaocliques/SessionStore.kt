@@ -9,15 +9,20 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Arquivos de sessao em `Android/data/<pacote>/files/sessions/`, no mesmo modelo
- * dos templates: podem ser enviados por `adb push` ou por um gerenciador de
+ * Arquivos de sessao em `Android/data/<pacote>/files/sessions/` — ou em
+ * `sessions_teste/` quando o modo teste esta ligado —, no mesmo modelo dos
+ * templates: podem ser enviados por `adb push` ou por um gerenciador de
  * arquivos, sem recompilar o app.
  */
 class SessionStore(private val context: Context) : SessionSource {
 
-    /** Diretorio das sessoes, criado se ainda nao existir. */
-    fun directory(): File =
-        File(context.getExternalFilesDir(null), DIRECTORY_NAME).apply { mkdirs() }
+    private val prefs = AppPreferences(context)
+
+    /** Diretorio das sessoes do modo atual, criado se ainda nao existir. */
+    fun directory(): File = File(
+        context.getExternalFilesDir(null),
+        if (prefs.testMode) TEST_DIRECTORY_NAME else DIRECTORY_NAME
+    ).apply { mkdirs() }
 
     override fun read(fileName: String): String? {
         val file = File(directory(), fileName)
@@ -35,6 +40,7 @@ class SessionStore(private val context: Context) : SessionSource {
 
     private companion object {
         const val DIRECTORY_NAME = "sessions"
+        const val TEST_DIRECTORY_NAME = "sessions_teste"
     }
 }
 
