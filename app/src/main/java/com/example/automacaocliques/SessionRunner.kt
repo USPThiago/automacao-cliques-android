@@ -379,11 +379,15 @@ class SessionRunner(
         if (reportInterval) {
             lastClickAt?.let { log.add("Tempo desde ultimo clique", "${now - it} ms") }
         }
-        lastClickAt = now
-        clicksSent++
         log.add("Clique", "x=${x.toInt()},y=${y.toInt()}")
         return when (env.click(x, y)) {
-            ClickOutcome.COMPLETED -> null
+            ClickOutcome.COMPLETED -> {
+                // So o gesto aceito conta como clique enviado e vira
+                // referencia para o proximo intervalo.
+                lastClickAt = now
+                clicksSent++
+                null
+            }
             ClickOutcome.REJECTED -> {
                 log.addError("Transicao", "NOK - gesto rejeitado")
                 "gesto rejeitado"

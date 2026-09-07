@@ -122,53 +122,66 @@ class ClickAccessibilityService : AccessibilityService() {
     }
 
     private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean, testMode: Boolean) {
-        runTemplates = TemplateStore(this, testMode)
-        if (!awaitForeignForeground()) {
-            if (stopRequested.get()) {
-                log.addError("Execucao", "parada")
-            } else {
-                log.addError("Transicao", "NOK - app em primeiro plano")
-            }
-            return
-        }
-        // A validacao vem depois da troca de app porque as dimensoes e a
-        // orientacao usadas nela precisam ser as do app alvo, e nao as da
-        // interface de automacao, que e sempre paisagem.
-        val screen = screenSize()
-        val load = SessionValidator.load(
-            SessionStore(this, testMode),
-            checkNotNull(runTemplates)::sizeOf,
-            screen
-        )
-        when (load) {
-            is SessionLoad.Failure -> {
-                log.addError("Carga inicial", "NOK - ${load.reason}")
+        val startedAt = SystemClock.elapsedRealtime()
+        var sessionRunner: SessionRunner? = null
+        try {
+            runTemplates = TemplateStore(this, testMode)
+            if (!awaitForeignForeground()) {
+                if (stopRequested.get()) {
+                    log.addError("Execucao", "parada")
+                } else {
+                    log.addError("Transicao", "NOK - app em primeiro plano")
+                }
                 return
             }
-            is SessionLoad.Ok -> {
-                log.add("Carga inicial", "OK")
-                if (debugEnabled) log.add("Modo debug", "ligado")
-                if (highlightsEnabled) log.add("Retangulos", "ligados")
-                val sessionRunner = SessionRunner(
-                    ServiceEnvironment(
-                        debugEnabled,
-                        highlightsEnabled,
-                        checkNotNull(runTemplates)
-                    ),
-                    log
-                )
-                runner = sessionRunner
-                // Parada pedida enquanto o executor era criado ou durante a
-                // validacao: o cancelamento e transferido para ele.
-                if (stopRequested.get()) sessionRunner.cancel()
-                when (val outcome = sessionRunner.run(load.main, load.sessions)) {
-                    RunOutcome.Success -> log.addError("Execucao", "concluida com sucesso")
-                    RunOutcome.Cancelled -> log.addError("Execucao", "parada")
-                    is RunOutcome.Failure ->
-                        log.addError("Execucao", "encerrada: ${outcome.reason}")
+            // A validacao vem depois da troca de app porque as dimensoes e a
+            // orientacao usadas nela precisam ser as do app alvo, e nao as da
+            // interface de automacao, que e sempre paisagem.
+            val screen = screenSize()
+            val load = SessionValidator.load(
+                SessionStore(this, testMode),
+                checkNotNull(runTemplates)::sizeOf,
+                screen
+            )
+            when (load) {
+                is SessionLoad.Failure -> {
+                    log.addError("Carga inicial", "NOK - ${load.reason}")
                 }
-                logSummary(sessionRunner.stats())
+                is SessionLoad.Ok -> {
+                    log.add("Carga inicial", "OK")
+                    if (debugEnabled) log.add("Modo debug", "ligado")
+                    if (highlightsEnabled) log.add("Retangulos", "ligados")
+                    sessionRunner = SessionRunner(
+                        ServiceEnvironment(
+                            debugEnabled,
+                            highlightsEnabled,
+                            checkNotNull(runTemplates)
+                        ),
+                        log
+                    )
+                    runner = sessionRunner
+                    // Parada pedida enquanto o executor era criado ou durante a
+                    // validacao: o cancelamento e transferido para ele.
+                    if (stopRequested.get()) sessionRunner.cancel()
+                    when (val outcome = sessionRunner.run(load.main, load.sessions)) {
+                        RunOutcome.Success -> log.addError("Execucao", "concluida com sucesso")
+                        RunOutcome.Cancelled -> log.addError("Execucao", "parada")
+                        is RunOutcome.Failure ->
+                            log.addError("Execucao", "encerrada: ${outcome.reason}")
+                    }
+                }
             }
+        } finally {
+            // O resumo encerra o log em qualquer saida, inclusive falhas
+            // antes de o roteiro existir (transicao/carga inicial).
+            logSummary(
+                sessionRunner?.stats()
+                    ?: SessionRunner.RunStats(
+                        resultadoSessions = 0,
+                        clicksSent = 0,
+                        elapsedMs = SystemClock.elapsedRealtime() - startedAt
+                    )
+            )
         }
     }
 
