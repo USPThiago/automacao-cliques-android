@@ -43,6 +43,11 @@ class MainActivity : AppCompatActivity() {
             prefs.debugEnabled = checked
             log.add("Modo debug", if (checked) "ligado" else "desligado")
         }
+        binding.highlightsSwitch.isChecked = prefs.highlightsEnabled
+        binding.highlightsSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.highlightsEnabled = checked
+            log.add("Retangulos", if (checked) "ligados" else "desligados")
+        }
 
         binding.templatesPath.text =
             getString(R.string.templates_dir, TemplateStore(this).directory().absolutePath)

@@ -17,6 +17,9 @@ data class TemplateMatch(
     val centerX: Float get() = left + width / 2f
     val centerY: Float get() = top + height / 2f
 
+    /** Regiao ocupada na tela, com `right`/`bottom` exclusivos. */
+    fun area(): Area = Area(left, top, left + width, top + height)
+
     fun describe(): String =
         "score=%.3f escala=%.2f centro=(%.1f, %.1f) regiao=[%d,%d][%d,%d]".format(
             score, scale, centerX, centerY, left, top, left + width, top + height

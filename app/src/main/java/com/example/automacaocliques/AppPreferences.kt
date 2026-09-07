@@ -14,8 +14,14 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_DEBUG_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_DEBUG_ENABLED, value).apply()
 
+    /** Retangulos de busca/match desenhados na tela durante a execucao. */
+    var highlightsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HIGHLIGHTS_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_HIGHLIGHTS_ENABLED, value).apply()
+
     private companion object {
         const val NAME = "automacao"
         const val KEY_DEBUG_ENABLED = "debug_enabled"
+        const val KEY_HIGHLIGHTS_ENABLED = "highlights_enabled"
     }
 }

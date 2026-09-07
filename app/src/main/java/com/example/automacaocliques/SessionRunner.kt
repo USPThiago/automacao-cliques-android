@@ -65,6 +65,18 @@ interface RunnerEnvironment {
 
     /** Mostra o popup de debug e bloqueia ate o usuario responder. */
     fun confirmStep(step: DebugStep): DebugChoice
+
+    /** `true` quando os retangulos de busca/match devem ser desenhados na tela. */
+    fun highlightsEnabled(): Boolean = false
+
+    /**
+     * Desenha [search] (area onde o template foi pesquisado) e [match] (regiao
+     * localizada), substituindo o desenho anterior. Coordenadas na tela real.
+     */
+    fun showHighlight(search: Area, match: Area) = Unit
+
+    /** Remove os retangulos, se exibidos. Chamado ao encerrar a execucao. */
+    fun hideHighlights() = Unit
 }
 
 /**
@@ -100,6 +112,8 @@ class SessionRunner(
             val reason = "erro inesperado na execucao: ${e.message}"
             log.add("Execucao", reason)
             RunOutcome.Failure(reason)
+        } finally {
+            env.hideHighlights()
         }
     }
 
@@ -191,8 +205,12 @@ class SessionRunner(
             val actionStart = env.elapsedMs()
             log.add("Acao", action.name)
 
-            val match = locate(screen, action, scale) ?: continue
+            val located = locate(screen, action, scale) ?: continue
+            val match = located.match
 
+            if (env.highlightsEnabled()) {
+                env.showHighlight(located.area, match.area())
+            }
             log.add("Escala", scale.describe())
             log.add(
                 "Posicao",
@@ -214,7 +232,7 @@ class SessionRunner(
                     attempt = attempt,
                     attempts = session.attempts,
                     actionName = action.name,
-                    match = Area(match.left, match.top, match.left + match.width, match.top + match.height),
+                    match = match.area(),
                     clicks = clicks,
                     nextSession = action.call
                 )
@@ -232,12 +250,15 @@ class SessionRunner(
         return AttemptOutcome.NothingFound
     }
 
+    /** Match aceito do template da acao e a area da tela onde ele foi buscado. */
+    private data class Located(val match: TemplateMatch, val area: Area)
+
     /** Ocorrencia aceita do template da acao, ou `null` se nao localizada. */
     private fun locate(
         screen: GrayImage,
         action: SessionAction,
         scale: ScreenScale
-    ): TemplateMatch? {
+    ): Located? {
         val template = env.templateOf(action.locate)
         if (template == null) {
             log.add("Acao ${action.name}", "template '${action.locate}' ausente")
@@ -278,7 +299,7 @@ class SessionRunner(
             )
             return null
         }
-        return match
+        return Located(match, area)
     }
 
     /** Desfecho dos cliques de uma acao. */

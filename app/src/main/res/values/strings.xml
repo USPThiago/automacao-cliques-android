@@ -20,6 +20,7 @@
     <string name="execution_stopping">Parando a execucao.</string>
     <string name="execution_already_running">Ja existe uma execucao em andamento.</string>
     <string name="debug_mode">Modo debug</string>
+    <string name="highlights_mode">Retangulos na tela</string>
     <string name="debug_title">Debug: acao executada</string>
     <string name="debug_session">Sessao</string>
     <string name="debug_attempt">Tentativa</string>

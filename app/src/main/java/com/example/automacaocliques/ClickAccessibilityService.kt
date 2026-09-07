@@ -58,6 +58,9 @@ class ClickAccessibilityService : AccessibilityService() {
     /** Popup do modo debug; so e tocado na thread principal. */
     private val debugOverlay by lazy { DebugOverlay(this) }
 
+    /** Retangulos de busca/match da execucao; so e tocado na thread principal. */
+    private val highlightOverlay by lazy { HighlightOverlay(this) }
+
     /**
      * Pedido de parada valido durante toda a execucao, inclusive antes de o
      * [SessionRunner] existir: Parar logo depois de Iniciar tem de valer.
@@ -91,11 +94,12 @@ class ClickAccessibilityService : AccessibilityService() {
         stopRequested.set(false)
         templates.invalidate()
         ensureExecutors()
-        // Lida uma vez por execucao, para nao pagar I/O a cada acao.
+        // Lidas uma vez por execucao, para nao pagar I/O a cada acao.
         val debugEnabled = prefs.debugEnabled
+        val highlightsEnabled = prefs.highlightsEnabled
         runnerExecutor.execute {
             try {
-                execute(debugEnabled)
+                execute(debugEnabled, highlightsEnabled)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro inesperado durante execucao", e)
                 log.add("Execucao", "erro inesperado: ${e.message}")
@@ -115,7 +119,7 @@ class ClickAccessibilityService : AccessibilityService() {
         mainHandler.post { debugOverlay.dismiss() }
     }
 
-    private fun execute(debugEnabled: Boolean) {
+    private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean) {
         if (!awaitForeignForeground()) {
             if (stopRequested.get()) {
                 log.add("Execucao", "parada")
@@ -136,7 +140,9 @@ class ClickAccessibilityService : AccessibilityService() {
             is SessionLoad.Ok -> {
                 log.add("Carga inicial", "OK")
                 if (debugEnabled) log.add("Modo debug", "ligado")
-                val sessionRunner = SessionRunner(ServiceEnvironment(debugEnabled), log)
+                if (highlightsEnabled) log.add("Retangulos", "ligados")
+                val sessionRunner =
+                    SessionRunner(ServiceEnvironment(debugEnabled, highlightsEnabled), log)
                 runner = sessionRunner
                 // Parada pedida enquanto o executor era criado ou durante a
                 // validacao: o cancelamento e transferido para ele.
@@ -261,7 +267,10 @@ class ClickAccessibilityService : AccessibilityService() {
     }
 
     /** Ponte entre o executor de sessoes e as APIs do aparelho. */
-    private inner class ServiceEnvironment(private val debugEnabled: Boolean) : RunnerEnvironment {
+    private inner class ServiceEnvironment(
+        private val debugEnabled: Boolean,
+        private val highlightsEnabled: Boolean
+    ) : RunnerEnvironment {
 
         override fun capture(): Capture {
             val queue = ArrayBlockingQueue<Capture>(1)
@@ -325,6 +334,16 @@ class ClickAccessibilityService : AccessibilityService() {
 
         override fun debugEnabled(): Boolean = debugEnabled
 
+        override fun highlightsEnabled(): Boolean = highlightsEnabled
+
+        override fun showHighlight(search: Area, match: Area) {
+            mainHandler.post { highlightOverlay.show(search, match) }
+        }
+
+        override fun hideHighlights() {
+            mainHandler.post { highlightOverlay.hide() }
+        }
+
         /**
          * Mostra a sobreposicao na thread principal e espera a resposta. Sem
          * resposta em [DEBUG_TIMEOUT_MS] a execucao e cancelada, para nao ficar
@@ -384,6 +403,7 @@ class ClickAccessibilityService : AccessibilityService() {
         stop()
         mainHandler.removeCallbacksAndMessages(null)
         debugOverlay.hide()
+        highlightOverlay.hide()
         synchronized(this) {
             runnerExecutor.shutdownNow()
             captureExecutor.shutdownNow()
