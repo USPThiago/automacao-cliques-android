@@ -97,6 +97,8 @@ O JSON nao aceita comentarios; os `//` abaixo sao apenas explicativos.
                                                 // (omita se foram medidas no proprio aparelho)
   "retries": 5,                                 // tentativas adicionais (total = 1 + retries); padrao 3
   "retryDelayMs": 1000,                         // espera entre tentativas; padrao 1000
+  "onLocateFailure": "fechar_popup",            // opcional: sessao executada quando as 1 + retries
+                                                // tentativas esgotam sem localizar acao alguma
 
   "actions": [                                  // avaliadas em ordem; so a primeira localizada roda
     {
@@ -130,6 +132,18 @@ O JSON nao aceita comentarios; os `//` abaixo sao apenas explicativos.
 Coordenadas de `clicks`, `clickArea` e `searchArea` sao escalonadas de `screen`
 para a resolucao real do aparelho; sem `screen`, sao usadas como estao.
 
+`onLocateFailure` (opcional, mesma convencao de nomes de `call`) e a sessao de
+recuperacao: quando as `1 + retries` tentativas terminam sem localizar nenhuma
+acao - inclusive quando a captura falha -, o log registra
+`Sessao <nome>: nenhuma acao localizada em N tentativa(s)` e
+`Transicao: onLocateFailure -> <sessao>`, e a sessao indicada comeca em seguida,
+sem espera adicional, com seus proprios `retries`/`retryDelayMs` e demais
+tempos. A sessao de recuperacao pode ter o proprio `onLocateFailure`, mas o
+tratamento fica desarmado ate a proxima acao executada com sucesso
+(`Transicao: OK`): se a recuperacao esgotar as tentativas antes disso, a
+execucao encerra com `... - encerrado`, como hoje. Falhas de gesto e
+cancelamento nunca acionam a recuperacao.
+
 ### Validacao da carga inicial
 
 Ao abrir o app e ao tocar em **Iniciar**, tudo e conferido antes de qualquer
@@ -137,7 +151,7 @@ clique; qualquer falha impede o inicio e o log indica o arquivo e o campo:
 
 - `mainSession.json` existe e e JSON valido;
 - toda sessao tem `name` e ao menos uma acao; toda acao tem `name` e `locate`;
-- todo `call` aponta para uma sessao existente em `sessions/`;
+- todo `call` e `onLocateFailure` aponta para uma sessao existente em `sessions/`;
 - todo `locate` tem imagem correspondente em `templates/`;
 - `searchArea` tem os quatro campos, com `right > left`, `bottom > top`, dentro
   da tela e comportando o template depois do escalonamento;
@@ -166,7 +180,10 @@ onde o template foi pesquisado (tela inteira quando a acao nao declara uma) e
 em vermelho a regiao exata onde ele foi localizado. Cada acao localizada
 substitui o desenho anterior, removido ao encerrar. Os retangulos sao
 escondidos durante cada captura para nao contaminar o casamento. Nao pausa a
-execucao.
+execucao. A janela do overlay cobre o display inteiro (barras do sistema e
+recortes inclusive) e as coordenadas da captura sao convertidas para o canvas
+pela posicao real da janela, de modo que os retangulos coincidem com o que o
+casamento viu.
 
 **Gravar log**: desligada, a caixa de log deixa de gravar as linhas comuns;
 o Logcat e as linhas de erro/resultado continuam sempre.

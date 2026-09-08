@@ -89,6 +89,61 @@ class SessionValidatorTest {
     }
 
     @Test
+    fun `carrega sessao alcancada apenas por onLocateFailure`() {
+        val result = load(
+            mapOf(
+                "mainSession.json" to """
+                    { "name": "menu", "onLocateFailure": "recuperar",
+                      "actions": [ { "name": "jogar", "locate": "botao" } ] }
+                """.trimIndent(),
+                "recuperar.json" to """
+                    { "name": "recuperar", "actions": [ { "name": "voltar", "locate": "botao" } ] }
+                """.trimIndent()
+            )
+        )
+
+        val ok = result as SessionLoad.Ok
+        assertEquals(setOf("mainSession.json", "recuperar.json"), ok.sessions.keys)
+        assertEquals("recuperar", ok.main.onLocateFailure)
+    }
+
+    @Test
+    fun `recusa onLocateFailure para sessao inexistente citando o campo`() {
+        val reason = reasonOf(
+            load(
+                mapOf(
+                    "mainSession.json" to """
+                        { "name": "menu", "onLocateFailure": "sumida",
+                          "actions": [ { "name": "jogar", "locate": "botao" } ] }
+                    """.trimIndent()
+                )
+            )
+        )
+        assertEquals(
+            "sumida.json nao encontrado ou ilegivel " +
+                "(chamado em mainSession.json, campo 'onLocateFailure')",
+            reason
+        )
+    }
+
+    @Test
+    fun `sessao de recuperacao pode declarar o proprio onLocateFailure em ciclo`() {
+        val result = load(
+            mapOf(
+                "mainSession.json" to """
+                    { "name": "a", "onLocateFailure": "b",
+                      "actions": [ { "name": "x", "locate": "botao" } ] }
+                """.trimIndent(),
+                "b.json" to """
+                    { "name": "b", "onLocateFailure": "mainSession",
+                      "actions": [ { "name": "y", "locate": "botao" } ] }
+                """.trimIndent()
+            )
+        )
+        assertTrue(result.toString(), result is SessionLoad.Ok)
+    }
+
+    @Test
     fun `recusa template ausente`() {
         val reason = reasonOf(
             load(

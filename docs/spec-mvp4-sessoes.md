@@ -16,7 +16,7 @@ Convenções deste documento: **DEVE** = requisito; **PODE** = opcional; valores
 | --- | --- | --- |
 | 1 | Semântica das ações de uma sessão | **Opção A**: as ações são avaliadas em ordem e **apenas a primeira cuja imagem for localizada é executada**; as demais são ignoradas |
 | 2 | Ciclos entre sessões | **Permitidos de propósito** (farm). Não há limite de passos. A parada é a falha das tentativas (ex.: o usuário troca de tela manualmente) |
-| 3 | `onFailure` por sessão | **Fora do escopo** desta etapa |
+| 3 | `onFailure` por sessão | **Fora do escopo** desta etapa — implementado depois como `onLocateFailure` (ver §2.2 e §4.2) |
 | 4 | Coordenadas | Absolutas, **escalonadas** pela resolução de referência `screen`; a escala aplicada **DEVE** aparecer no log |
 | 5 | Formato das coordenadas | Chaves nomeadas: `{ "x": .., "y": .. }` e `{ "left": .., "top": .., "right": .., "bottom": .. }` |
 | 6 | Tempos | Defaults `retryDelayMs` 1000, `clickIntervalMs` 300, `waitAfterMs` 1000; campos ausentes no JSON assumem o default (tela de configurações fica para depois) |
@@ -74,6 +74,7 @@ demais nomes são livres.
 | `screen` | `{width, height}` | não | resolução atual | Resolução em que as coordenadas foram medidas |
 | `retries` | int ≥ 0 | não | 3 | Tentativas **adicionais**; total = `1 + retries` |
 | `retryDelayMs` | int ≥ 0 | não | 1000 | Espera entre tentativas |
+| `onLocateFailure` | string | não | — | Sessão de recuperação (mesma convenção de `call`) executada quando as `1 + retries` tentativas esgotam sem localizar ação alguma; validada na carga inicial |
 | `actions` | lista | sim, ≥ 1 | — | Avaliadas em ordem (opção A) |
 
 #### Ação
@@ -131,7 +132,7 @@ Ao abrir o app (e ao tocar em Iniciar), **DEVE** validar tudo e registrar
 
 1. `sessions/mainSession.json` existe e é JSON válido;
 2. cada sessão tem `name` e ao menos uma ação; cada ação tem `name` e `locate`;
-3. todo `call` aponta para um arquivo de sessão existente;
+3. todo `call` e `onLocateFailure` aponta para um arquivo de sessão existente;
 4. todo `locate` tem imagem correspondente em `templates/`;
 5. `searchArea` com os quatro campos, `right > left`, `bottom > top`, dentro da tela;
 6. template cabe na `searchArea` (após escalonamento);
@@ -172,13 +173,26 @@ enquanto verdadeiro:
                 se acao.call ausente: encerra com sucesso
                 sessao := carrega(acao.call)
                 continua o laco externo
-        # nenhuma acao localizada
+        # nenhuma acao localizada (captura falha conta como tentativa)
         tentativa := tentativa + 1
-        espera sessao.retryDelayMs
+        espera sessao.retryDelayMs             # so entre tentativas
     ate tentativa > 1 + sessao.retries
+    se sessao.onLocateFailure presente e recuperacaoArmada:
+        recuperacaoArmada := false
+        log "Sessao <nome>: nenhuma acao localizada em <N> tentativa(s)"
+        log "Transicao onLocateFailure -> <sessao>"
+        sessao := sessoes[onLocateFailure]     # sem espera adicional
+        continua o laco externo
     log "Sessao <nome>: nenhuma acao localizada em <N> tentativa(s) - encerrado"
     encerra com falha
 ```
+
+`recuperacaoArmada` começa verdadeiro e volta a verdadeiro em todo `Transicao OK`
+(ação localizada, todos os cliques despachados e `waitAfterMs` cumprido). Assim uma
+sessão de recuperação que esgota antes de executar uma ação encerra a execução em vez
+de acionar o próprio `onLocateFailure`; depois de um `Transicao OK`, a sessão seguinte
+volta a ter direito ao tratamento. Falhas de gesto, cancelamento e erros abortivos
+nunca acionam a recuperação.
 
 Notas:
 

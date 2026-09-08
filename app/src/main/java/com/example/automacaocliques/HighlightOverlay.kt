@@ -4,9 +4,8 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.util.Log
-import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 
@@ -16,6 +15,10 @@ import android.view.WindowManager
  * amarelo a area onde o template foi pesquisado e em vermelho a regiao exata
  * onde ele foi localizado. Nao captura toques: cada [show] substitui o desenho
  * anterior e [hide] o remove. Todos os metodos devem rodar na thread principal.
+ *
+ * As areas chegam em coordenadas da captura; a janela e criada em tela cheia
+ * ([DisplayOverlay.layoutParams]) e, por seguranca, [OverlayGeometry] corrige
+ * qualquer deslocamento entre o canvas e o display antes de desenhar.
  */
 class HighlightOverlay(private val context: Context) {
 
@@ -23,27 +26,21 @@ class HighlightOverlay(private val context: Context) {
 
     private var root: HighlightView? = null
 
-    /** Desenha [search] (amarelo) e [match] (vermelho), substituindo o desenho anterior. */
-    fun show(search: Area, match: Area) {
+    /**
+     * Desenha [search] (amarelo) e [match] (vermelho), substituindo o desenho
+     * anterior. [screen] e o tamanho da captura em que as areas foram medidas.
+     */
+    fun show(search: Area, match: Area, screen: Size) {
         val view = root ?: createView() ?: return
         view.search = search
         view.match = match
+        view.screen = screen
         view.invalidate()
     }
 
     private fun createView(): HighlightView? {
         val view = HighlightView(context)
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.TOP or Gravity.START
+        val params = DisplayOverlay.layoutParams(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
         return try {
             windowManager.addView(view, params)
             root = view
@@ -70,6 +67,7 @@ class HighlightOverlay(private val context: Context) {
 
         var search: Area? = null
         var match: Area? = null
+        var screen: Size? = null
 
         private val density = context.resources.displayMetrics.density
 
@@ -86,10 +84,11 @@ class HighlightOverlay(private val context: Context) {
         }
 
         override fun onDraw(canvas: Canvas) {
-            search?.let { canvas.drawRect(it.rect(), searchPaint) }
-            match?.let { canvas.drawRect(it.rect(), matchPaint) }
+            val geometry = DisplayOverlay.geometryOf(this, screen)
+            search?.let { canvas.drawRect(geometry.toCanvas(it).rect(), searchPaint) }
+            match?.let { canvas.drawRect(geometry.toCanvas(it).rect(), matchPaint) }
         }
 
-        private fun Area.rect() = android.graphics.Rect(left, top, right, bottom)
+        private fun Area.rect() = Rect(left, top, right, bottom)
     }
 }
