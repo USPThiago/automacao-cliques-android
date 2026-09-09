@@ -33,6 +33,8 @@ data class DebugStep(
     val actionName: String,
     /** Posicao do template na tela real. */
     val match: Area,
+    /** Dimensoes da captura em que [match] e [clicks] foram medidos. */
+    val screen: Size,
     /** Pontos efetivamente despachados, ja escalonados, na ordem. */
     val clicks: List<ClickPoint>,
     /** Proxima sessao (`call`), ou `null` quando a acao encerra o roteiro. */
@@ -73,9 +75,10 @@ interface RunnerEnvironment {
 
     /**
      * Desenha [search] (area onde o template foi pesquisado) e [match] (regiao
-     * localizada), substituindo o desenho anterior. Coordenadas na tela real.
+     * localizada), substituindo o desenho anterior. Coordenadas em pixels da
+     * captura de tamanho [screen].
      */
-    fun showHighlight(search: Area, match: Area) = Unit
+    fun showHighlight(search: Area, match: Area, screen: Size) = Unit
 
     /** Remove os retangulos, se exibidos. Chamado ao encerrar a execucao. */
     fun hideHighlights() = Unit
@@ -85,7 +88,9 @@ interface RunnerEnvironment {
  * Percorre o grafo de sessoes: a cada tentativa captura a tela uma unica vez,
  * avalia as acoes em ordem e executa **apenas a primeira** cuja imagem for
  * localizada (opcao A). Ciclos entre sessoes sao permitidos; a parada natural e
- * a exaustao das tentativas de uma sessao.
+ * a exaustao das tentativas de uma sessao, salvo quando ela declara
+ * `onLocateFailure`: entao a sessao de recuperacao e iniciada imediatamente,
+ * uma unica vez ate a proxima acao executada com sucesso (`Transicao: OK`).
  */
 class SessionRunner(
     private val env: RunnerEnvironment,
@@ -147,6 +152,9 @@ class SessionRunner(
     private fun runInternal(main: Session, sessions: Map<String, Session>): RunOutcome {
         var session = main
         runStart = env.elapsedMs()
+        // Guard anti-loop do onLocateFailure: desarmado ao entrar na recuperacao,
+        // rearmado apenas quando uma acao e executada com sucesso.
+        var locateFailureArmed = true
 
         while (true) {
             if (session.name == RESULTADO_SESSION) resultadoSessions++
@@ -160,6 +168,7 @@ class SessionRunner(
 
                 when (val outcome = attempt(session, attempt)) {
                     is AttemptOutcome.Executed -> {
+                        locateFailureArmed = true
                         val call = outcome.call
                             ?: return RunOutcome.Success
                         val fileName = SessionValidator.fileNameOf(call)
@@ -182,10 +191,21 @@ class SessionRunner(
 
             if (next == null) {
                 if (cancelled) return cancelledOutcome()
-                val reason = "Sessao ${session.name}: nenhuma acao localizada em " +
-                    "${session.attempts} tentativa(s) - encerrado"
-                log.addError(reason)
-                return RunOutcome.Failure(reason)
+                val exhausted = "Sessao ${session.name}: nenhuma acao localizada em " +
+                    "${session.attempts} tentativa(s)"
+                val recovery = session.onLocateFailure
+                if (recovery == null || !locateFailureArmed) {
+                    val reason = "$exhausted - encerrado"
+                    log.addError(reason)
+                    return RunOutcome.Failure(reason)
+                }
+                locateFailureArmed = false
+                log.addError(exhausted)
+                next = sessions[SessionValidator.fileNameOf(recovery)] ?: run {
+                    log.addError("Transicao", "NOK - sessao $recovery ilegivel")
+                    return RunOutcome.Failure("sessao $recovery ilegivel")
+                }
+                log.add("Transicao", "onLocateFailure -> $recovery")
             }
             session = next
         }
@@ -237,7 +257,7 @@ class SessionRunner(
             log.add("Acao", action.name)
             log.add("Tempo localizacao", "${located.elapsedMs} ms")
             if (env.highlightsEnabled()) {
-                env.showHighlight(located.area, match.area())
+                env.showHighlight(located.area, match.area(), capture.size)
             }
             log.add("Escala", scale.describe())
             log.add(
@@ -260,6 +280,7 @@ class SessionRunner(
                     attempts = session.attempts,
                     actionName = action.name,
                     match = match.area(),
+                    screen = capture.size,
                     clicks = clicks,
                     nextSession = action.call
                 )

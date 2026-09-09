@@ -56,6 +56,11 @@ data class Session(
     val retries: Int = DEFAULT_RETRIES,
     val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
     val actions: List<SessionAction>,
+    /**
+     * Sessao de recuperacao (mesma convencao de nomes de `call`) executada
+     * quando todas as [attempts] terminam sem localizar acao alguma.
+     */
+    val onLocateFailure: String? = null,
     /** Nome do arquivo de origem, usado nas mensagens de erro. */
     val fileName: String = ""
 ) {

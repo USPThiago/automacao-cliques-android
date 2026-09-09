@@ -5,15 +5,12 @@ import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
-import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
-import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
@@ -214,21 +211,7 @@ class ClickAccessibilityService : AccessibilityService() {
     }
 
     /** Resolucao real da tela, incluindo status bar e barra de navegacao. */
-    fun screenSize(): Size {
-        val bounds = screenBounds()
-        return Size(bounds.width(), bounds.height())
-    }
-
-    private fun screenBounds(): Rect {
-        val windowManager = getSystemService(WindowManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return Rect(windowManager.currentWindowMetrics.bounds)
-        }
-        val metrics = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        windowManager.defaultDisplay.getRealMetrics(metrics)
-        return Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
-    }
+    fun screenSize(): Size = DisplayOverlay.displaySize(this)
 
     /**
      * Captura a tela via [takeScreenshot] e entrega o bitmap (ou `null` em caso
@@ -366,8 +349,8 @@ class ClickAccessibilityService : AccessibilityService() {
 
         override fun highlightsEnabled(): Boolean = highlightsEnabled
 
-        override fun showHighlight(search: Area, match: Area) {
-            mainHandler.post { highlightOverlay.show(search, match) }
+        override fun showHighlight(search: Area, match: Area, screen: Size) {
+            mainHandler.post { highlightOverlay.show(search, match, screen) }
         }
 
         /**

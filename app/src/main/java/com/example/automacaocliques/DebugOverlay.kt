@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PixelFormat
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -54,8 +53,8 @@ class DebugOverlay(private val context: Context) {
         binding.okButton.setOnClickListener { answer(DebugChoice.CONTINUE) }
         binding.cancelButton.setOnClickListener { answer(DebugChoice.CANCEL) }
 
-        val screenHeight = context.resources.displayMetrics.heightPixels
-        val clickOnTop = step.clicks.all { it.y < screenHeight / 2 }
+        // Os cliques estao em coordenadas da captura: a metade e a da captura.
+        val clickOnTop = step.clicks.all { it.y < step.screen.height / 2 }
         container.addView(
             binding.root,
             FrameLayout.LayoutParams(
@@ -65,15 +64,7 @@ class DebugOverlay(private val context: Context) {
             )
         )
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.TOP or Gravity.START
+        val params = DisplayOverlay.layoutParams()
         try {
             windowManager.addView(container, params)
             root = container
@@ -122,7 +113,7 @@ class DebugOverlay(private val context: Context) {
 
         override fun onDraw(canvas: Canvas) {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
-            val match = step.match
+            val match = DisplayOverlay.geometryOf(this, step.screen).toCanvas(step.match)
             canvas.drawRect(
                 match.left.toFloat(),
                 match.top.toFloat(),

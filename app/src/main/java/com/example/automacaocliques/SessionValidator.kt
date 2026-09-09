@@ -33,7 +33,7 @@ object SessionValidator {
 
     private const val EXTENSION = ".json"
 
-    /** Nome de arquivo de uma sessao referenciada em `call`. */
+    /** Nome de arquivo de uma sessao referenciada em `call` ou `onLocateFailure`. */
     fun fileNameOf(name: String): String =
         if (name.endsWith(EXTENSION, ignoreCase = true)) name else "$name$EXTENSION"
 
@@ -66,6 +66,14 @@ object SessionValidator {
             validateActions(session, templates, screen)?.let { return SessionLoad.Failure(it) }
 
             loaded[fileName] = session
+            session.onLocateFailure?.let { target ->
+                pending.addLast(
+                    Pending(
+                        fileName = fileNameOf(target),
+                        calledFrom = "${session.fileName}, campo 'onLocateFailure'"
+                    )
+                )
+            }
             session.actions.forEach { action ->
                 val call = action.call ?: return@forEach
                 pending.addLast(

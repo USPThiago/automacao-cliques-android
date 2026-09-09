@@ -59,7 +59,7 @@ class SessionRunnerTest {
 
         override fun highlightsEnabled(): Boolean = highlightsEnabled
 
-        override fun showHighlight(search: Area, match: Area) {
+        override fun showHighlight(search: Area, match: Area, screen: Size) {
             events += "retangulos"
         }
 
@@ -149,14 +149,19 @@ class SessionRunnerTest {
     private fun session(
         name: String,
         vararg actions: SessionAction,
-        retries: Int = 0
+        retries: Int = 0,
+        onLocateFailure: String? = null
     ) = Session(
         name = name,
         retries = retries,
         retryDelayMs = 10,
         actions = actions.toList(),
+        onLocateFailure = onLocateFailure,
         fileName = "$name.json"
     )
+
+    private fun sessionLines() =
+        log.lines().filter { it.startsWith("Sessao: ") }.map { it.removePrefix("Sessao: ") }
 
     // --- testes --------------------------------------------------------------
 
@@ -596,6 +601,203 @@ class SessionRunnerTest {
 
         assertEquals(RunOutcome.Success, SessionRunner(env, log).run(main, env.sessions))
         assertEquals(128 to 192, env.clicks.single())
+    }
+
+    // --- onLocateFailure -----------------------------------------------------
+
+    @Test
+    fun `esgotamento entra na sessao de onLocateFailure`() {
+        val recovery = session("recuperar", action("fecha", "alvo_b", call = "menu"))
+        val menu = session("menu", action("vai", "alvo_a"), retries = 1, onLocateFailure = "recuperar")
+        val env = FakeEnv(
+            captures = mutableListOf(
+                screenWith(), screenWith(), // menu esgota
+                screenWith("alvo_b"), // recuperacao
+                screenWith("alvo_a") // menu de novo
+            ),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(menu, env.sessions))
+        assertEquals(listOf("menu", "recuperar", "menu"), sessionLines())
+        assertEquals(2, env.clicks.size)
+        val lines = log.lines()
+        assertTrue(lines.toString(), lines.contains("Sessao menu: nenhuma acao localizada em 2 tentativa(s)"))
+        assertTrue(lines.toString(), lines.contains("Transicao: onLocateFailure -> recuperar"))
+        assertTrue(lines.toString(), lines.none { it.contains("encerrado") })
+    }
+
+    @Test
+    fun `falhas de captura esgotadas tambem entram na recuperacao`() {
+        val recovery = session("recuperar", action("fecha", "alvo_b"))
+        val menu = session("menu", action("vai", "alvo_a"), retries = 1, onLocateFailure = "recuperar")
+        val env = FakeEnv(
+            captures = mutableListOf(Capture.Failed(2), Capture.Failed(2), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(menu, env.sessions))
+        assertEquals(listOf("menu", "recuperar"), sessionLines())
+        assertEquals(3, env.captureCount)
+    }
+
+    @Test
+    fun `nao ha espera extra entre a ultima tentativa e a recuperacao`() {
+        val recovery = session("recuperar", action("fecha", "alvo_b"))
+        val menu = session("menu", action("vai", "alvo_a"), retries = 2, onLocateFailure = "recuperar")
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith(), screenWith(), screenWith(), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(menu, env.sessions))
+        // retryDelayMs (10) so entre tentativas: 3 tentativas => 2 pausas, nada depois.
+        assertEquals(listOf(10L, 10L), env.sleeps)
+    }
+
+    @Test
+    fun `delays internos da recuperacao continuam valendo`() {
+        val recovery = Session(
+            name = "recuperar",
+            retries = 1,
+            retryDelayMs = 7,
+            actions = listOf(
+                SessionAction(
+                    name = "fecha",
+                    locate = "alvo_b",
+                    clicks = listOf(ClickPoint(1, 1), ClickPoint(2, 2)),
+                    clickIntervalMs = 3,
+                    waitAfterMs = 5
+                )
+            ),
+            fileName = "recuperar.json"
+        )
+        val menu = session("menu", action("vai", "alvo_a"), onLocateFailure = "recuperar")
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith(), screenWith(), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(menu, env.sessions))
+        // 7 = retryDelayMs da recuperacao; 3 = clickIntervalMs; 5 = waitAfterMs.
+        assertEquals(listOf(7L, 3L, 5L), env.sleeps)
+    }
+
+    @Test
+    fun `recuperacao que esgota antes de uma transicao OK nao chama outro tratamento`() {
+        val recovery = session("recuperar", action("fecha", "alvo_b"), onLocateFailure = "menu")
+        val menu = session("menu", action("vai", "alvo_a"), onLocateFailure = "recuperar")
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith()),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+        )
+
+        val outcome = SessionRunner(env, log).run(menu, env.sessions)
+
+        assertTrue(outcome.toString(), outcome is RunOutcome.Failure)
+        assertEquals(
+            "Sessao recuperar: nenhuma acao localizada em 1 tentativa(s) - encerrado",
+            (outcome as RunOutcome.Failure).reason
+        )
+        assertEquals(listOf("menu", "recuperar"), sessionLines())
+        assertEquals(2, env.captureCount)
+        assertEquals(
+            1,
+            log.lines().count { it.startsWith("Transicao: onLocateFailure") }
+        )
+    }
+
+    @Test
+    fun `acao bem sucedida na recuperacao rearma o tratamento para a proxima sessao`() {
+        val fallback = session("fallback", action("c", "alvo_c"))
+        val recovery = session("recuperar", action("fecha", "alvo_b", call = "menu"))
+        val menu = session(
+            "menu",
+            action("vai", "alvo_a", call = "fallback"),
+            onLocateFailure = "recuperar"
+        )
+        val env = FakeEnv(
+            captures = mutableListOf(
+                screenWith(), // menu esgota -> recuperar (desarma)
+                screenWith("alvo_b"), // recuperar OK -> menu (rearma)
+                screenWith(), // menu esgota de novo -> recuperar
+                screenWith("alvo_b"), // recuperar OK -> menu
+                screenWith("alvo_a"), // menu OK -> fallback
+                screenWith("alvo_c") // fim
+            ),
+            templates = templates(),
+            sessions = mapOf(
+                "menu.json" to menu,
+                "recuperar.json" to recovery,
+                "fallback.json" to fallback
+            )
+        )
+
+        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(menu, env.sessions))
+        assertEquals(
+            listOf("menu", "recuperar", "menu", "recuperar", "menu", "fallback"),
+            sessionLines()
+        )
+        assertEquals(2, log.lines().count { it == "Transicao: onLocateFailure -> recuperar" })
+    }
+
+    @Test
+    fun `sessao sem onLocateFailure mantem o encerramento atual`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith()),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        val outcome = SessionRunner(env, log).run(session("menu", action("vai", "alvo_a"), retries = 1), env.sessions)
+
+        assertEquals(
+            RunOutcome.Failure("Sessao menu: nenhuma acao localizada em 2 tentativa(s) - encerrado"),
+            outcome
+        )
+        assertTrue(log.text(), log.lines().none { it.startsWith("Transicao: onLocateFailure") })
+    }
+
+    @Test
+    fun `cancelamento e falhas de gesto nao acionam onLocateFailure`() {
+        val recovery = session("recuperar", action("fecha", "alvo_b"))
+        val menu = session("menu", action("vai", "alvo_a"), retries = 3, onLocateFailure = "recuperar")
+        val sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+
+        val rejected = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a")),
+            templates = templates(),
+            sessions = sessions,
+            clickOutcome = { ClickOutcome.REJECTED }
+        )
+        assertEquals(RunOutcome.Failure("gesto rejeitado"), SessionRunner(rejected, log).run(menu, sessions))
+        assertEquals(listOf("menu"), sessionLines())
+        log.clear()
+
+        val cancelledMidway = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a")),
+            templates = templates(),
+            sessions = sessions,
+            clickOutcome = { ClickOutcome.CANCELLED }
+        )
+        assertEquals(RunOutcome.Failure("gesto cancelado"), SessionRunner(cancelledMidway, log).run(menu, sessions))
+        assertEquals(listOf("menu"), sessionLines())
+        log.clear()
+
+        val stopped = FakeEnv(
+            captures = mutableListOf(screenWith()),
+            templates = templates(),
+            sessions = sessions
+        )
+        val runner = SessionRunner(stopped, log)
+        stopped.onCapture = { runner.cancel() }
+        assertEquals(RunOutcome.Cancelled, runner.run(menu, sessions))
+        assertEquals(listOf("menu"), sessionLines())
+        assertEquals(1, stopped.captureCount)
     }
 
     // --- modo debug ----------------------------------------------------------

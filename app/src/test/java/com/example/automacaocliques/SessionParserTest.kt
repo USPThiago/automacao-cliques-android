@@ -24,6 +24,7 @@ class SessionParserTest {
         assertEquals(3, session.retries)
         assertEquals(4, session.attempts)
         assertEquals(1_000L, session.retryDelayMs)
+        assertNull(session.onLocateFailure)
 
         val action = session.actions.single()
         assertEquals(0.80, action.threshold, 1e-9)
@@ -206,6 +207,42 @@ class SessionParserTest {
 
         assertEquals(3, error.line)
         assertEquals("retries", error.field)
+    }
+
+    @Test
+    fun `le onLocateFailure como referencia a outra sessao`() {
+        val session = SessionParser.parse(
+            "mainSession.json",
+            """{ "name": "menu", "onLocateFailure": "recuperar_tela",
+               "actions": [ { "name": "a", "locate": "t" } ] }"""
+        )
+        assertEquals("recuperar_tela", session.onLocateFailure)
+
+        val explicitNull = SessionParser.parse(
+            "mainSession.json",
+            """{ "name": "menu", "onLocateFailure": null,
+               "actions": [ { "name": "a", "locate": "t" } ] }"""
+        )
+        assertNull(explicitNull.onLocateFailure)
+    }
+
+    @Test
+    fun `recusa onLocateFailure com tipo errado ou vazio`() {
+        val wrongType = fails(
+            "mainSession.json",
+            """{ "name": "menu",
+               "onLocateFailure": 3,
+               "actions": [ { "name": "a", "locate": "t" } ] }"""
+        )
+        assertTrue(wrongType, wrongType.startsWith("mainSession.json:2:"))
+        assertTrue(wrongType, wrongType.contains("campo 'onLocateFailure': esperado um texto"))
+
+        val empty = fails(
+            "mainSession.json",
+            """{ "name": "menu", "onLocateFailure": "  ",
+               "actions": [ { "name": "a", "locate": "t" } ] }"""
+        )
+        assertTrue(empty, empty.contains("campo 'onLocateFailure': nome de sessao vazio"))
     }
 
     @Test

@@ -291,7 +291,10 @@ execução morre na carga inicial.
 Ações que **não** localizam o template não geram linhas: entre uma `Tentativa` e a
 próxima só aparecem `Tempo captura`/`Resolucao da tela` se nada foi localizado. Quando
 a sessão esgota as tentativas, o erro `Sessao <nome>: nenhuma acao localizada em N
-tentativa(s) - encerrado` marca o fim do roteiro.
+tentativa(s) - encerrado` marca o fim do roteiro — a menos que a sessão declare
+`onLocateFailure`: aí aparecem `Sessao <nome>: nenhuma acao localizada em N
+tentativa(s)` e `Transicao: onLocateFailure -> <sessao>`, e a execução continua na
+sessão de recuperação.
 
 Interpretação dos escores (vão de -1 a 1; o limite padrão para clicar é **0.80**):
 
@@ -328,6 +331,8 @@ O JSON não aceita comentários; os `//` abaixo são só para leitura.
                                                 // (omita se mediu no próprio aparelho)
   "retries": 5,                                 // tentativas adicionais (total = 1 + retries); padrão 3
   "retryDelayMs": 1000,                         // espera entre tentativas; padrão 1000
+  "onLocateFailure": "fechar_popup",            // opcional: sessão executada se as 1 + retries
+                                                // tentativas esgotarem sem localizar nada
 
   "actions": [                                  // avaliadas em ordem; só a primeira localizada roda
     {
@@ -421,7 +426,11 @@ o roteiro estiver conferido.
   `searchArea` onde o template está sendo pesquisado (tela inteira quando a ação não
   declara uma) e em vermelho a região exata onde ele foi localizado. Cada ação
   localizada substitui o desenho anterior, removido ao encerrar — e os retângulos são
-  escondidos durante cada captura para não contaminar o casamento. Padrão: desligada.
+  escondidos durante cada captura para não contaminar o casamento. A janela do overlay
+  cobre o display inteiro (barras e recortes inclusive) e as coordenadas da captura são
+  convertidas pela posição real da janela, então os retângulos devem coincidir com o que
+  a captura viu — se aparecerem deslocados, anote modelo/versão do Android. Padrão:
+  desligada.
 - **Gravar log**: desligada, a caixa de log deixa de gravar as linhas comuns; o Logcat e
   as linhas de erro/resultado continuam sempre. Padrão: ligada.
 - **Modo teste**: passa a ler sessões e templates de `sessions_teste/` e
@@ -496,7 +505,8 @@ completo do campo e o valor recebido.
 | `Transicao NOK - app em primeiro plano` | o jogo não chegou ao primeiro plano em 15 s | depois de tocar em Iniciar, troque para o jogo dentro dos 15 s; evite que ele seja descarregado da memória |
 | `Transicao NOK - captura falhou (codigo=...)` | jogo com bloqueio de captura (`FLAG_SECURE`) | nada a fazer no app se o conteúdo for protegido |
 | `Captura de tela exige Android 11 (API 30)` | aparelho antigo | o app não funciona nesse aparelho |
-| `Sessao x: nenhuma acao localizada em N tentativa(s) - encerrado` | a tela esperada não apareceu | aumente `retries`/`retryDelayMs` ou revise os templates da sessão |
+| `Sessao x: nenhuma acao localizada em N tentativa(s) - encerrado` | a tela esperada não apareceu | aumente `retries`/`retryDelayMs`, revise os templates da sessão ou declare um `onLocateFailure` que leve a uma tela conhecida |
+| `Transicao: onLocateFailure -> y` | a sessão esgotou as tentativas e entrou na sessão de recuperação `y` | esperado; se `y` também esgotar antes de executar uma ação, a execução encerra (sem encadear outra recuperação) |
 | `Transicao NOK - gesto rejeitado` / `gesto cancelado` | o sistema recusou o toque (outro gesto em curso, serviço desligando) | tente de novo com o jogo em primeiro plano |
 | Nada acontece e não há log | serviço desligado ou processo morto | reative o serviço; status deve estar **ATIVO** |
 | `Debug: sem resposta - execucao parada` | o popup do modo debug ficou 5 min sem resposta | toque em OK/Cancel no popup; desligue o **Modo debug** para rodar sem paradas |

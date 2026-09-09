@@ -38,6 +38,7 @@ object SessionParser {
         val retries = optionalInt(fileName, obj, "retries", Session.DEFAULT_RETRIES, minimum = 0)
         val retryDelayMs =
             optionalLong(fileName, obj, "retryDelayMs", Session.DEFAULT_RETRY_DELAY_MS)
+        val onLocateFailure = readSessionRef(fileName, "onLocateFailure", obj.entries["onLocateFailure"])
 
         val actionsValue = obj.entries["actions"]
             ?: fail(fileName, "actions", "campo obrigatorio ausente", at = obj.location)
@@ -63,9 +64,20 @@ object SessionParser {
             retries = retries,
             retryDelayMs = retryDelayMs,
             actions = actions,
+            onLocateFailure = onLocateFailure,
             fileName = fileName
         )
     }
+
+    /** Referencia opcional a outra sessao (`call`, `onLocateFailure`): `null` quando ausente. */
+    private fun readSessionRef(fileName: String, label: String, value: JsonValue?): String? =
+        when (value) {
+            null -> null
+            is JsonValue.Null -> null
+            is JsonValue.Str -> value.value.takeIf { it.isNotBlank() }
+                ?: fail(fileName, label, "nome de sessao vazio", value)
+            else -> fail(fileName, label, "esperado um texto", value)
+        }
 
     private fun readAction(fileName: String, index: Int, obj: JsonValue.Obj): SessionAction {
         val prefix = "actions[$index]"
@@ -152,13 +164,7 @@ object SessionParser {
                 SessionAction.DEFAULT_WAIT_AFTER_MS,
                 label = "$prefix.waitAfterMs"
             ),
-            call = when (val value = obj.entries["call"]) {
-                null -> null
-                is JsonValue.Null -> null
-                is JsonValue.Str -> value.value.takeIf { it.isNotBlank() }
-                    ?: fail(fileName, "$prefix.call", "nome de sessao vazio", value)
-                else -> fail(fileName, "$prefix.call", "esperado um texto", value)
-            },
+            call = readSessionRef(fileName, "$prefix.call", obj.entries["call"]),
             sourceLine = obj.location.line
         )
     }

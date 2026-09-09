@@ -156,7 +156,10 @@ keystore nem a senha.
 Decidido explicitamente na especificação do MVP 4
 ([`docs/spec-mvp4-sessoes.md`](spec-mvp4-sessoes.md), §9) — não implementar sem nova decisão:
 
-- `onFailure` por sessão (ação alternativa quando nada é localizado);
+- ~~`onFailure` por sessão~~ — implementado como `onLocateFailure` (sessão de
+  recuperação após esgotar `1 + retries`, com guard anti-loop até o próximo
+  `Transicao: OK`); pendente apenas validação em aparelho real, junto com a
+  correção do deslocamento dos retângulos (overlay em tela cheia com insets/cutout);
 - tela de configurações para os tempos e limites (hoje só no JSON);
 - notificação persistente durante a execução;
 - gravação do log em arquivo;
