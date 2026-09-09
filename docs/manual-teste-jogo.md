@@ -349,21 +349,32 @@ O JSON não aceita comentários; os `//` abaixo são só para leitura.
         { "x": 980, "y": 220 },
         { "x": 540, "y": 1800, "delayMs": 500 } // delayMs do ponto tem precedência sobre clickIntervalMs
       ],
-      // "clickArea": { "left": 900, "top": 150,   // alternativa a "clicks": um único toque em
-      //              "right": 1060, "bottom": 300 }, // ponto aleatório dentro da área;
-      //                                              // declarar "clicks" (mesmo vazio) junto é erro
       "clickIntervalMs": 300,                   // espera entre cliques; padrão 300
       "waitAfterMs": 1000,                      // espera após o último clique; padrão 1000
       "call": "menu_principal"                  // próxima sessão: sessions/menu_principal.json
+                                                // ("call" e "onLocateFailure" usam o nome do
+                                                // ARQUIVO, com ou sem .json, não o "name")
     },
     {
-      "name": "entrar no jogo",                 // avaliada só se a anterior não for localizada
-      "locate": "botao_jogar"
-                                                // sem "call": termina com sucesso ao clicar
+      "name": "coletar recompensa",             // avaliada só se a anterior não for localizada
+      "locate": "bau",                          // templates/bau.png
+      "clickArea": {                            // alternativa a "clicks": UM toque em ponto
+        "left": 400, "top": 1500,               // aleatório dentro da área (varia a cada execução,
+        "right": 680, "bottom": 1650            // útil contra detecção de padrão); erro se
+      },                                        // declarada junto com "clicks" (mesmo vazio)
+      "call": "mainSession"                     // ciclo: volta para este mesmo arquivo
+    },
+    {
+      "name": "entrar no jogo",
+      "locate": "botao_jogar"                   // sem clicks/clickArea: toca no centro do recorte
+                                                // localizado; sem "call": termina com sucesso
     }
   ]
 }
 ```
+
+Formas de clicar, em ordem de precedência: `clickArea` (um toque aleatório na área),
+`clicks` (lista de toques) ou, sem os dois, um toque no centro do template localizado.
 
 Envie os arquivos para o aparelho do mesmo jeito que os templates (seção 4.5), trocando
 `templates` por `sessions`:

@@ -32,8 +32,14 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 - **MVP 4**: roteiros declarados em sessoes JSON no aparelho, busca
   restrita por `searchArea` com escala unica e early exit, e interface
   intermediaria com log de execucao (Iniciar/Parar/Limpar/Copiar).
-- **MVP 5 (atual)**: modo debug com popup passo a passo, mostrando onde cada
+- **MVP 5**: modo debug com popup passo a passo, mostrando onde cada
   acao localizou o template e onde clicou antes de seguir para a proxima sessao.
+- **Pos-MVP 5 (atual)**: robustez (excecoes na captura/clique, memoria no
+  casamento), retangulos de busca/match na tela, `clickArea` (toque aleatorio
+  numa area), chave **Gravar log**, **Modo teste** (pastas `*_teste`), resumo
+  ao encerrar (`Total de salas`, `Tempo total`, `Quantidade de cliques`),
+  layout em duas colunas com o log sempre visivel e `onLocateFailure` (sessao
+  de recuperacao ao esgotar as tentativas).
 - **Proximos**: overlay flutuante (start/stop sem sair do app alvo) e edicao das
   sessoes pela propria interface.
 
@@ -63,7 +69,7 @@ botao que abre as configuracoes de acessibilidade do sistema.
 4. Os eventos recebidos aparecem no Logcat:
    `adb logcat -s ClickService`.
 
-## Sessoes em JSON (MVP 4)
+## Sessoes em JSON
 
 O roteiro nao e mais digitado na tela: ele vive em arquivos JSON no aparelho, em
 
@@ -110,27 +116,40 @@ O JSON nao aceita comentarios; os `//` abaixo sao apenas explicativos.
         "left": 700, "top": 100,                // padrao: tela inteira
         "right": 1080, "bottom": 500
       },
-      "clicks": [                               // omita para clicar no centro do recorte encontrado
-        { "x": 980, "y": 220 },                 // alternativa: "clickArea" (ver abaixo)
+      "clicks": [                               // lista de toques, na ordem
+        { "x": 980, "y": 220 },
         { "x": 540, "y": 1800, "delayMs": 500 } // delayMs do ponto tem precedencia sobre clickIntervalMs
       ],
-      // "clickArea": { "left": 900, "top": 150,   // alternativa a "clicks": um unico toque em
-      //              "right": 1060, "bottom": 300 }, // ponto aleatorio dentro da area; nao pode
-      //                                              // ser usada junto com "clicks"
       "clickIntervalMs": 300,                   // espera entre cliques; padrao 300
       "waitAfterMs": 1000,                      // espera apos o ultimo clique; padrao 1000
       "call": "menu_principal"                  // proxima sessao: sessions/menu_principal.json
+                                                // ("call" e "onLocateFailure" usam o nome do
+                                                // ARQUIVO, com ou sem .json, nao o "name")
     },
     {
-      "name": "entrar no jogo",                 // so e avaliada se a anterior nao for localizada
-      "locate": "botao_jogar"                   // sem "call": termina com sucesso
+      "name": "coletar recompensa",             // so e avaliada se a anterior nao for localizada
+      "locate": "bau",                          // templates/bau.png
+      "clickArea": {                            // alternativa a "clicks": UM toque em ponto
+        "left": 400, "top": 1500,               // aleatorio dentro da area (varia a cada execucao,
+        "right": 680, "bottom": 1650            // util contra deteccao de padrao); erro se
+      },                                        // declarada junto com "clicks"
+      "call": "mainSession"                     // ciclo: volta para este mesmo arquivo
+    },
+    {
+      "name": "entrar no jogo",
+      "locate": "botao_jogar"                   // sem clicks/clickArea: toca no centro do recorte
+                                                // localizado; sem "call": termina com sucesso
     }
   ]
 }
 ```
 
-Coordenadas de `clicks`, `clickArea` e `searchArea` sao escalonadas de `screen`
-para a resolucao real do aparelho; sem `screen`, sao usadas como estao.
+Formas de clicar, em ordem de precedencia: `clickArea` (um toque aleatorio na
+area), `clicks` (lista de toques) ou, sem os dois, um toque no centro do
+template localizado. Coordenadas de `clicks`, `clickArea` e `searchArea` sao
+escalonadas de `screen` para a resolucao real do aparelho; sem `screen`, sao
+usadas como estao. Uma sessao chamada `Resultado` e contada no resumo final
+(`Total de salas`).
 
 `onLocateFailure` (opcional, mesma convencao de nomes de `call`) e a sessao de
 recuperacao: quando as `1 + retries` tentativas terminam sem localizar nenhuma
@@ -194,9 +213,12 @@ sem sobrescrever a versao em uso; ao alternar, a carga e revalidada e os
 caminhos exibidos mudam. O par de pastas e fixado no inicio de cada execucao:
 alternar no meio do roteiro so vale para a proxima.
 
-Rotulos do log: `Carga inicial`, `Sessao`, `Tentativa`, `Acao`, `Escala`,
+Rotulos do log: `Carga inicial`, `Modo debug`, `Retangulos`, `Gravacao do log`,
+`Modo teste` (estado das chaves), `Execucao` (iniciada, concluida, parada ou
+encerrada com o motivo), `Sessao`, `Tentativa`, `Acao`, `Escala`,
 `Tempo captura`, `Tempo localizacao`, `Tempo desde ultimo clique`,
-`Resolucao da tela`, `Posicao`, `Clique`, `Transicao`, `Debug`. Acoes que nao
+`Resolucao da tela`, `Posicao`, `Clique`, `Transicao` (`OK`, `NOK - <motivo>`
+ou `onLocateFailure -> <sessao>`), `Debug`. Acoes que nao
 localizam o template nao geram linhas. Ao encerrar (sucesso, falha ou
 cancelamento — inclusive falhas antes do roteiro existir), o log termina com o
 resumo: `Total de salas` (sessoes chamadas `Resultado` iniciadas), `Tempo
@@ -241,7 +263,7 @@ funciona.
   de um aparelho de resolucao diferente;
 - `searchArea` limita o casamento ao recorte informado, que e o maior ganho de
   desempenho;
-- a busca para assim que atinge escore >= 0.95;
+- a busca para assim que atinge escore >= 0.95 (ou >= `threshold`, se maior);
 - os tempos de captura, localizacao e o intervalo desde o ultimo clique
   aparecem no log, medidos com relogio monotonico
   (`SystemClock.elapsedRealtime`).
