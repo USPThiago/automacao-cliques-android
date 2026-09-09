@@ -200,8 +200,10 @@ Rotulos do log: `Carga inicial`, `Sessao`, `Tentativa`, `Acao`, `Escala`,
 localizam o template nao geram linhas. Ao encerrar (sucesso, falha ou
 cancelamento — inclusive falhas antes do roteiro existir), o log termina com o
 resumo: `Total de salas` (sessoes chamadas `Resultado` iniciadas), `Tempo
-total` (HH:MM:SS do inicio ao fim do processamento) e `Quantidade de cliques`
-(apenas gestos aceitos pelo sistema; um toque rejeitado nao entra na conta).
+total` (HH:MM:SS do inicio ao fim do processamento), `Quantidade de cliques`
+(apenas gestos aceitos pelo sistema; um toque rejeitado nao entra na conta) e
+`Recuperacoes onLocateFailure` (quantas vezes uma sessao de recuperacao foi
+acionada por esgotamento de tentativas).
 
 ## Modo debug
 

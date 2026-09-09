@@ -321,6 +321,7 @@ class SessionRunnerTest {
         val stats = runner.stats()
         assertEquals(1, stats.resultadoSessions)
         assertEquals(2, stats.clicksSent)
+        assertEquals(0, stats.locateFailures)
         assertTrue(stats.elapsedMs >= 0)
     }
 
@@ -738,12 +739,14 @@ class SessionRunnerTest {
             )
         )
 
-        assertEquals(RunOutcome.Success, SessionRunner(env, log).run(menu, env.sessions))
+        val runner = SessionRunner(env, log)
+        assertEquals(RunOutcome.Success, runner.run(menu, env.sessions))
         assertEquals(
             listOf("menu", "recuperar", "menu", "recuperar", "menu", "fallback"),
             sessionLines()
         )
         assertEquals(2, log.lines().count { it == "Transicao: onLocateFailure -> recuperar" })
+        assertEquals(2, runner.stats().locateFailures)
     }
 
     @Test

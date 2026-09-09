@@ -117,6 +117,9 @@ class SessionRunner(
     /** Sessoes `Resultado` iniciadas (cada passagem por ela conta), para o resumo. */
     private var resultadoSessions = 0
 
+    /** Entradas em sessao de `onLocateFailure`, para o resumo final. */
+    private var locateFailures = 0
+
     fun cancel() {
         cancelled = true
     }
@@ -125,12 +128,13 @@ class SessionRunner(
     data class RunStats(
         val resultadoSessions: Int,
         val clicksSent: Int,
+        val locateFailures: Int,
         val elapsedMs: Long
     )
 
     /** Contadores do processamento; validos mesmo apos falha ou cancelamento. */
     fun stats(): RunStats =
-        RunStats(resultadoSessions, clicksSent, env.elapsedMs() - runStart)
+        RunStats(resultadoSessions, clicksSent, locateFailures, env.elapsedMs() - runStart)
 
     /**
      * Executa o grafo ja validado na carga inicial: [sessions] mapeia nome de
@@ -205,6 +209,7 @@ class SessionRunner(
                     log.addError("Transicao", "NOK - sessao $recovery ilegivel")
                     return RunOutcome.Failure("sessao $recovery ilegivel")
                 }
+                locateFailures++
                 log.add("Transicao", "onLocateFailure -> $recovery")
             }
             session = next

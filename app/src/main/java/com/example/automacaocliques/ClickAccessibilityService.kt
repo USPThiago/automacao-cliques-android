@@ -176,6 +176,7 @@ class ClickAccessibilityService : AccessibilityService() {
                     ?: SessionRunner.RunStats(
                         resultadoSessions = 0,
                         clicksSent = 0,
+                        locateFailures = 0,
                         elapsedMs = SystemClock.elapsedRealtime() - startedAt
                     )
             )
@@ -409,12 +410,14 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /**
      * Resumo do processamento, sempre as ultimas linhas do log: salas (sessoes
-     * `Resultado` iniciadas), tempo total em HH:MM:SS e cliques enviados.
+     * `Resultado` iniciadas), tempo total em HH:MM:SS, cliques enviados e
+     * entradas em sessao de `onLocateFailure`.
      */
     private fun logSummary(stats: SessionRunner.RunStats) {
         log.addError("Total de salas", stats.resultadoSessions.toString())
         log.addError("Tempo total", formatElapsed(stats.elapsedMs))
         log.addError("Quantidade de cliques", stats.clicksSent.toString())
+        log.addError("Recuperacoes onLocateFailure", stats.locateFailures.toString())
     }
 
     private fun formatElapsed(ms: Long): String {

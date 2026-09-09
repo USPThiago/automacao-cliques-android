@@ -280,11 +280,13 @@ Execucao: concluida com sucesso
 Total de salas: 0
 Tempo total: 00:00:02
 Quantidade de cliques: 1
+Recuperacoes onLocateFailure: 0
 ```
 
 `Tempo desde ultimo clique` aparece antes do `Clique` sempre que houve um clique
-anterior na execução (no primeiro clique a linha é omitida). As três linhas finais
-(`Total de salas`, `Tempo total` em HH:MM:SS e `Quantidade de cliques`) encerram o log
+anterior na execução (no primeiro clique a linha é omitida). As quatro linhas finais
+(`Total de salas`, `Tempo total` em HH:MM:SS, `Quantidade de cliques` e
+`Recuperacoes onLocateFailure`, total de entradas em sessão de recuperação) encerram o log
 em **qualquer** encerramento — sucesso, falha ou cancelamento, inclusive quando a
 execução morre na carga inicial.
 
