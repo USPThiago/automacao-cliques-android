@@ -31,7 +31,8 @@ JVM, com captura simulada. É a única pendência que pode invalidar decisões d
 - Roteiro a seguir: [`docs/manual-teste-jogo.md`](manual-teste-jogo.md).
 - Conferir na caixa de log: `Carga inicial OK`, `Escala`, `Tempo captura`,
   `Tempo localizacao`, `Tempo desde ultimo clique`, `Transicao OK` e, ao final, o
-  resumo `Total de salas` / `Tempo total` / `Quantidade de cliques`.
+  resumo `Total de salas` / `Tempo total` / `Quantidade de cliques` /
+  `Recuperacoes onLocateFailure`.
 - Registrar os tempos medidos (captura e localização, com e sem `searchArea`) para
   comparar com a expectativa de ganho de ~7x da escala única.
 - **Pronto quando**: um ciclo de pelo menos duas sessões (com `call` de volta) roda no
