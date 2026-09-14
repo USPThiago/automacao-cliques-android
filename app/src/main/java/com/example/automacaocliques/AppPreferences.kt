@@ -2,6 +2,7 @@ package com.example.automacaocliques
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 /** Preferencias do app compartilhadas entre a Activity e o servico. */
 class AppPreferences(context: Context) {
@@ -29,11 +30,17 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_TEST_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_TEST_MODE, value).apply()
 
+    /** Limite de duracao da execucao, em minutos; `0` = sem limite. */
+    var runLimitMinutes: Int
+        get() = prefs.getInt(KEY_RUN_LIMIT_MINUTES, 0)
+        set(value) = prefs.edit { putInt(KEY_RUN_LIMIT_MINUTES, value) }
+
     private companion object {
         const val NAME = "automacao"
         const val KEY_DEBUG_ENABLED = "debug_enabled"
         const val KEY_HIGHLIGHTS_ENABLED = "highlights_enabled"
         const val KEY_LOG_ENABLED = "log_enabled"
         const val KEY_TEST_MODE = "test_mode"
+        const val KEY_RUN_LIMIT_MINUTES = "run_limit_minutes"
     }
 }

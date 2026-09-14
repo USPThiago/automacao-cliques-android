@@ -37,9 +37,10 @@ APK no celular: veja [DEVELOPMENT.md](DEVELOPMENT.md).
 - **Pos-MVP 5 (atual)**: robustez (excecoes na captura/clique, memoria no
   casamento), retangulos de busca/match na tela, `clickArea` (toque aleatorio
   numa area), chave **Gravar log**, **Modo teste** (pastas `*_teste`), resumo
-  ao encerrar (`Total de salas`, `Tempo total`, `Quantidade de cliques`),
-  layout em duas colunas com o log sempre visivel e `onLocateFailure` (sessao
-  de recuperacao ao esgotar as tentativas).
+  ao encerrar (`Total de salas`, `Tempo total`, `Quantidade de cliques`,
+  estatisticas de tentativas por sessao), layout em duas colunas com o log
+  sempre visivel, `onLocateFailure` (sessao de recuperacao ao esgotar as
+  tentativas) e campo **Limite (min)** (parada automatica apos X minutos).
 - **Proximos**: overlay flutuante (start/stop sem sair do app alvo) e edicao das
   sessoes pela propria interface.
 
@@ -190,7 +191,7 @@ visivel):
   plano antes da primeira captura; a troca de app e feita pelo usuario),
   **Parar**, **Limpar** e **Copiar**;
 - chaves **Modo debug** (ver abaixo), **Retangulos na tela**, **Gravar log** e
-  **Modo teste**, todas persistidas entre execucoes;
+  **Modo teste**, e o campo **Limite (min)**, todos persistidos entre execucoes;
 - caixa de log com as ultimas 500 linhas, mantida pelo servico (sobrevive ao
   fechamento da tela) e espelhada no Logcat com a tag `ClickService`.
 
@@ -213,9 +214,18 @@ sem sobrescrever a versao em uso; ao alternar, a carga e revalidada e os
 caminhos exibidos mudam. O par de pastas e fixado no inicio de cada execucao:
 alternar no meio do roteiro so vale para a proxima.
 
+**Limite (min)**: inteiro >= 0; `0` (padrao) = sem limite. Lido no Iniciar,
+como as chaves (alterar durante a execucao vale para a proxima). O prazo conta
+do inicio da execucao (o mesmo do `Tempo total`); quando estoura, a acao em
+curso e concluida (todos os cliques e o `waitAfterMs`) e a execucao para antes
+de iniciar a proxima sessao — ou, se a sessao ainda nao localizou nada, antes
+da proxima tentativa. O log registra `Execucao: interrompida por limite de X
+min` em vez de `Execucao: parada`, seguido do resumo normal.
+
 Rotulos do log: `Carga inicial`, `Modo debug`, `Retangulos`, `Gravacao do log`,
-`Modo teste` (estado das chaves), `Execucao` (iniciada, concluida, parada ou
-encerrada com o motivo), `Sessao`, `Tentativa`, `Acao`, `Escala`,
+`Modo teste`, `Limite de tempo` (estado das chaves e do campo), `Execucao`
+(iniciada, concluida, parada, interrompida por limite ou encerrada com o
+motivo), `Sessao`, `Tentativa`, `Acao`, `Escala`,
 `Tempo captura`, `Tempo localizacao`, `Tempo desde ultimo clique`,
 `Resolucao da tela`, `Posicao`, `Clique`, `Transicao` (`OK`, `NOK - <motivo>`
 ou `onLocateFailure -> <sessao>`), `Debug`. Acoes que nao
@@ -225,7 +235,12 @@ resumo: `Total de salas` (sessoes chamadas `Resultado` iniciadas), `Tempo
 total` (HH:MM:SS do inicio ao fim do processamento), `Quantidade de cliques`
 (apenas gestos aceitos pelo sistema; um toque rejeitado nao entra na conta) e
 `Recuperacoes onLocateFailure` (quantas vezes uma sessao de recuperacao foi
-acionada por esgotamento de tentativas).
+acionada por esgotamento de tentativas) e uma linha por sessao visitada, na
+ordem da primeira visita, com a tentativa em que cada passagem localizou uma
+acao: `Sessao: <nome> min(<a>) max(<b>) freq(<c>)` — menor, maior e valor(es)
+mais frequente(s) (em empate, todos em ordem crescente: `freq(3,5)`).
+Passagens que esgotaram as tentativas nao entram na amostra; sessao sem nenhuma
+localizacao aparece como `min(-) max(-) freq(-)`.
 
 ## Modo debug
 

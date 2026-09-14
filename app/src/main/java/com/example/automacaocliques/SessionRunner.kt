@@ -22,7 +22,23 @@ sealed class RunOutcome {
 
     object Cancelled : RunOutcome()
 
+    /** Prazo de execucao esgotado; a acao em curso foi concluida antes da parada. */
+    object TimeLimit : RunOutcome()
+
     data class Failure(val reason: String) : RunOutcome()
+}
+
+/**
+ * Linha do resumo final com as tentativas em que cada passagem pela sessao
+ * [name] localizou uma acao: `Sessao: <nome> min(a) max(b) freq(c)`. Em
+ * `freq` vao todas as modas em ordem crescente; sem amostra, `-` nos tres.
+ */
+fun formatSessionAttempts(name: String, attempts: List<Int>): String {
+    if (attempts.isEmpty()) return "Sessao: $name min(-) max(-) freq(-)"
+    val counts = attempts.groupingBy { it }.eachCount()
+    val top = counts.values.max()
+    val modes = counts.filterValues { it == top }.keys.sorted().joinToString(",")
+    return "Sessao: $name min(${attempts.min()}) max(${attempts.max()}) freq($modes)"
 }
 
 /** Informacoes mostradas no popup do modo debug depois dos cliques de uma acao. */
@@ -96,7 +112,9 @@ class SessionRunner(
     private val env: RunnerEnvironment,
     private val log: ExecutionLog,
     /** Fonte de aleatoriedade do `clickArea`, injetavel nos testes. */
-    private val random: Random = Random.Default
+    private val random: Random = Random.Default,
+    /** Prazo da execucao a partir de [run]; `0` = sem limite. */
+    private val timeLimitMs: Long = 0L
 ) {
 
     @Volatile
@@ -120,6 +138,12 @@ class SessionRunner(
     /** Entradas em sessao de `onLocateFailure`, para o resumo final. */
     private var locateFailures = 0
 
+    /**
+     * Por sessao, na ordem da primeira visita, a tentativa em que cada passagem
+     * localizou uma acao. Passagens esgotadas nao entram.
+     */
+    private val sessionAttempts = LinkedHashMap<String, MutableList<Int>>()
+
     fun cancel() {
         cancelled = true
     }
@@ -129,12 +153,19 @@ class SessionRunner(
         val resultadoSessions: Int,
         val clicksSent: Int,
         val locateFailures: Int,
-        val elapsedMs: Long
+        val elapsedMs: Long,
+        /** Tentativas em que houve localizacao, por sessao, na ordem de primeira visita. */
+        val sessionAttempts: Map<String, List<Int>> = emptyMap()
     )
 
     /** Contadores do processamento; validos mesmo apos falha ou cancelamento. */
-    fun stats(): RunStats =
-        RunStats(resultadoSessions, clicksSent, locateFailures, env.elapsedMs() - runStart)
+    fun stats(): RunStats = RunStats(
+        resultadoSessions,
+        clicksSent,
+        locateFailures,
+        env.elapsedMs() - runStart,
+        sessionAttempts.mapValues { it.value.toList() }
+    )
 
     /**
      * Executa o grafo ja validado na carga inicial: [sessions] mapeia nome de
@@ -161,17 +192,21 @@ class SessionRunner(
         var locateFailureArmed = true
 
         while (true) {
+            if (timeLimitReached()) return RunOutcome.TimeLimit
             if (session.name == RESULTADO_SESSION) resultadoSessions++
             log.add("Sessao", session.name)
+            val locatedAt = sessionAttempts.getOrPut(session.name) { mutableListOf() }
 
             var next: Session? = null
             var attempt = 1
             while (attempt <= session.attempts) {
                 if (cancelled) return cancelledOutcome()
+                if (attempt > 1 && timeLimitReached()) return RunOutcome.TimeLimit
                 log.add("Tentativa", "$attempt de ${session.attempts}")
 
                 when (val outcome = attempt(session, attempt)) {
                     is AttemptOutcome.Executed -> {
+                        locatedAt += attempt
                         locateFailureArmed = true
                         val call = outcome.call
                             ?: return RunOutcome.Success
@@ -215,6 +250,10 @@ class SessionRunner(
             session = next
         }
     }
+
+    /** `true` quando ha limite e o prazo desde o inicio de [run] ja passou. */
+    private fun timeLimitReached(): Boolean =
+        timeLimitMs > 0 && env.elapsedMs() - runStart >= timeLimitMs
 
     private fun cancelledOutcome(): RunOutcome {
         log.addError("Execucao", "interrompida pelo usuario")
