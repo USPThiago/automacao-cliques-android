@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -176,7 +175,11 @@ class MainActivity : AppCompatActivity() {
     /** Mostra o log do servico, rolando ate a ultima linha. */
     private fun showLog() {
         binding.logText.text = log.text()
-        binding.logScroll.post { binding.logScroll.fullScroll(View.FOCUS_DOWN) }
+        // scrollTo em vez de fullScroll: fullScroll move o foco para o texto do
+        // log e fecharia o teclado de qualquer campo em edicao.
+        binding.logScroll.post {
+            binding.logScroll.scrollTo(0, binding.logText.bottom)
+        }
     }
 
     private fun toast(messageRes: Int) {
