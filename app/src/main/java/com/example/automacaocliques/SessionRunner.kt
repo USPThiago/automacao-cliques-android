@@ -29,16 +29,28 @@ sealed class RunOutcome {
 }
 
 /**
- * Linha do resumo final com as tentativas em que cada passagem pela sessao
- * [name] localizou uma acao: `Sessao: <nome> min(a) max(b) freq(c)`. Em
- * `freq` vao todas as modas em ordem crescente; sem amostra, `-` nos tres.
+ * Tentativas em que as passagens pela sessao [name] localizaram uma acao,
+ * como quantidade de passagens por numero da tentativa ([counts]). Passagens
+ * esgotadas nao entram; sessao visitada sem localizacao tem [counts] vazio.
  */
-fun formatSessionAttempts(name: String, attempts: List<Int>): String {
-    if (attempts.isEmpty()) return "Sessao: $name min(-) max(-) freq(-)"
-    val counts = attempts.groupingBy { it }.eachCount()
+data class SessionAttemptStats(val name: String, val counts: Map<Int, Int> = emptyMap()) {
+
+    companion object {
+        fun of(name: String, vararg attempts: Int) =
+            SessionAttemptStats(name, attempts.asList().groupingBy { it }.eachCount())
+    }
+}
+
+/**
+ * Linha do resumo final: `Sessao: <nome> min(a) max(b) freq(c)`. Em `freq`
+ * vao todas as modas em ordem crescente; sem amostra, `-` nos tres.
+ */
+fun formatSessionAttempts(stats: SessionAttemptStats): String {
+    val counts = stats.counts
+    if (counts.isEmpty()) return "Sessao: ${stats.name} min(-) max(-) freq(-)"
     val top = counts.values.max()
     val modes = counts.filterValues { it == top }.keys.sorted().joinToString(",")
-    return "Sessao: $name min(${attempts.min()}) max(${attempts.max()}) freq($modes)"
+    return "Sessao: ${stats.name} min(${counts.keys.min()}) max(${counts.keys.max()}) freq($modes)"
 }
 
 /** Informacoes mostradas no popup do modo debug depois dos cliques de uma acao. */
@@ -139,10 +151,20 @@ class SessionRunner(
     private var locateFailures = 0
 
     /**
-     * Por sessao, na ordem da primeira visita, a tentativa em que cada passagem
-     * localizou uma acao. Passagens esgotadas nao entram.
+     * Por arquivo de sessao, na ordem da primeira visita, quantas passagens
+     * localizaram uma acao em cada numero de tentativa.
      */
-    private val sessionAttempts = LinkedHashMap<String, MutableList<Int>>()
+    private val sessionAttempts = LinkedHashMap<String, SessionAttemptCounter>()
+
+    private class SessionAttemptCounter(val name: String) {
+        val counts = sortedMapOf<Int, Int>()
+
+        fun record(attempt: Int) {
+            counts[attempt] = (counts[attempt] ?: 0) + 1
+        }
+
+        fun snapshot() = SessionAttemptStats(name, counts.toMap())
+    }
 
     fun cancel() {
         cancelled = true
@@ -155,7 +177,7 @@ class SessionRunner(
         val locateFailures: Int,
         val elapsedMs: Long,
         /** Tentativas em que houve localizacao, por sessao, na ordem de primeira visita. */
-        val sessionAttempts: Map<String, List<Int>> = emptyMap()
+        val sessionAttempts: List<SessionAttemptStats> = emptyList()
     )
 
     /** Contadores do processamento; validos mesmo apos falha ou cancelamento. */
@@ -164,7 +186,7 @@ class SessionRunner(
         clicksSent,
         locateFailures,
         env.elapsedMs() - runStart,
-        sessionAttempts.mapValues { it.value.toList() }
+        sessionAttempts.values.map { it.snapshot() }
     )
 
     /**
@@ -195,7 +217,7 @@ class SessionRunner(
             if (timeLimitReached()) return RunOutcome.TimeLimit
             if (session.name == RESULTADO_SESSION) resultadoSessions++
             log.add("Sessao", session.name)
-            val locatedAt = sessionAttempts.getOrPut(session.name) { mutableListOf() }
+            sessionAttempts.getOrPut(session.fileName) { SessionAttemptCounter(session.name) }
 
             var next: Session? = null
             var attempt = 1
@@ -206,7 +228,6 @@ class SessionRunner(
 
                 when (val outcome = attempt(session, attempt)) {
                     is AttemptOutcome.Executed -> {
-                        locatedAt += attempt
                         locateFailureArmed = true
                         val call = outcome.call
                             ?: return RunOutcome.Success
@@ -296,6 +317,7 @@ class SessionRunner(
 
             // Acoes que nao localizam o template nao geram linhas no log.
             val located = locate(screen, action, scale) ?: continue
+            sessionAttempts.getValue(session.fileName).record(attempt)
             val match = located.match
 
             log.add("Acao", action.name)

@@ -825,10 +825,42 @@ class SessionRunnerTest {
 
         assertTrue(runner.run(sessionA, env.sessions) is RunOutcome.Failure)
         assertEquals(
-            linkedMapOf("a" to listOf(1, 2), "b" to listOf(3)),
+            listOf(SessionAttemptStats.of("a", 1, 2), SessionAttemptStats.of("b", 3)),
             runner.stats().sessionAttempts
         )
-        assertEquals(listOf("a", "b"), runner.stats().sessionAttempts.keys.toList())
+    }
+
+    @Test
+    fun `localizacao conta mesmo quando a acao e abortada`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith(), screenWith("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap(),
+            clickOutcome = { ClickOutcome.REJECTED }
+        )
+        val main = session("menu", action("vai", "alvo_a", clicks = listOf(ClickPoint(1, 1))), retries = 1)
+        val runner = SessionRunner(env, log)
+
+        assertTrue(runner.run(main, env.sessions) is RunOutcome.Failure)
+        assertEquals(listOf(SessionAttemptStats.of("menu", 2)), runner.stats().sessionAttempts)
+    }
+
+    @Test
+    fun `sessoes homonimas em arquivos distintos tem linhas separadas`() {
+        val sessionB = session("Menu", action("fim", "alvo_b"))
+        val sessionA = session("Menu", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB.copy(fileName = "b.json"))
+        )
+        val runner = SessionRunner(env, log)
+
+        assertEquals(RunOutcome.Success, runner.run(sessionA.copy(fileName = "a.json"), env.sessions))
+        assertEquals(
+            listOf(SessionAttemptStats.of("Menu", 1), SessionAttemptStats.of("Menu", 1)),
+            runner.stats().sessionAttempts
+        )
     }
 
     @Test
@@ -844,7 +876,7 @@ class SessionRunnerTest {
 
         assertEquals(RunOutcome.Success, runner.run(menu, env.sessions))
         assertEquals(
-            linkedMapOf("menu" to emptyList(), "recuperar" to listOf(1)),
+            listOf(SessionAttemptStats("menu"), SessionAttemptStats.of("recuperar", 1)),
             runner.stats().sessionAttempts
         )
     }
@@ -853,14 +885,14 @@ class SessionRunnerTest {
     fun `formata min max e moda das tentativas`() {
         assertEquals(
             "Sessao: A min(1) max(6) freq(5)",
-            formatSessionAttempts("A", listOf(3, 5, 6, 5, 1, 3, 4, 6, 5, 1))
+            formatSessionAttempts(SessionAttemptStats.of("A", 3, 5, 6, 5, 1, 3, 4, 6, 5, 1))
         )
         assertEquals(
             "Sessao: A min(3) max(5) freq(3,5)",
-            formatSessionAttempts("A", listOf(5, 3, 5, 3))
+            formatSessionAttempts(SessionAttemptStats.of("A", 5, 3, 5, 3))
         )
-        assertEquals("Sessao: A min(2) max(2) freq(2)", formatSessionAttempts("A", listOf(2)))
-        assertEquals("Sessao: A min(-) max(-) freq(-)", formatSessionAttempts("A", emptyList()))
+        assertEquals("Sessao: A min(2) max(2) freq(2)", formatSessionAttempts(SessionAttemptStats.of("A", 2)))
+        assertEquals("Sessao: A min(-) max(-) freq(-)", formatSessionAttempts(SessionAttemptStats("A")))
     }
 
     // --- limite de minutos ---------------------------------------------------
@@ -893,7 +925,7 @@ class SessionRunnerTest {
         assertEquals(1, env.captureCount)
         assertEquals(listOf("a"), sessionLines())
         assertTrue(log.text(), log.lines().contains("Transicao: OK"))
-        assertEquals(mapOf("a" to listOf(1)), runner.stats().sessionAttempts)
+        assertEquals(listOf(SessionAttemptStats.of("a", 1)), runner.stats().sessionAttempts)
     }
 
     @Test
@@ -909,7 +941,7 @@ class SessionRunnerTest {
         assertEquals(RunOutcome.TimeLimit, runner.run(main, env.sessions))
         assertEquals(1, env.captureCount)
         assertTrue(env.clicks.isEmpty())
-        assertEquals(mapOf("menu" to emptyList<Int>()), runner.stats().sessionAttempts)
+        assertEquals(listOf(SessionAttemptStats("menu")), runner.stats().sessionAttempts)
     }
 
     @Test

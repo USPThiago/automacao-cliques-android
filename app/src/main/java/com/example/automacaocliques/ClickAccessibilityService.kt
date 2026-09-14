@@ -428,8 +428,8 @@ class ClickAccessibilityService : AccessibilityService() {
         log.addError("Tempo total", formatElapsed(stats.elapsedMs))
         log.addError("Quantidade de cliques", stats.clicksSent.toString())
         log.addError("Recuperacoes onLocateFailure", stats.locateFailures.toString())
-        stats.sessionAttempts.forEach { (name, attempts) ->
-            log.addError(formatSessionAttempts(name, attempts))
+        stats.sessionAttempts.forEach { attempts ->
+            log.addError(formatSessionAttempts(attempts))
         }
     }
 
