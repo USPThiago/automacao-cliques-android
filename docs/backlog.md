@@ -23,6 +23,37 @@ incremento de funcionalidade; **P2** = qualidade/manutenção.
 
 ## P0 — Validar o que já está implementado
 
+### 0. Bugs reportados em aparelho real
+
+Observados pelo usuário após o PR [#30](https://github.com/USPThiago/automacao-cliques-android/pull/30).
+**Não implementar sem solicitação explícita**; registrados aqui para triagem.
+
+**0a. `Total de salas` no resumo final conta sessões demais.** O valor parece
+corresponder ao número de sessões concluídas com sucesso, e não apenas às
+passagens pela sala (sessão `Batalha!` ou `Resultado` — uma das duas, a definir).
+A impressão é que até a versão anterior o número estava correto.
+
+- O que o código faz hoje: `SessionRunner.run()` incrementa `resultadoSessions`
+  no **início** de cada sessão cujo `name` é exatamente `"Resultado"`
+  (`RESULTADO_SESSION`), antes de saber se ela localizou algo. Cada reentrada
+  na sessão conta de novo — inclusive quando ela é alcançada via `onLocateFailure`
+  ou quando o roteiro volta a ela sem ter passado por uma sala nova.
+- Hipóteses a verificar no log completo de uma execução: (1) o roteiro chega em
+  `Resultado` mais de uma vez por sala (por exemplo, `call` de volta após uma
+  falha de localização); (2) o campo `name` do JSON difere do nome do arquivo e o
+  contador está olhando o campo errado para o roteiro atual; (3) a decisão
+  original era contar `Batalha!` e não `Resultado`.
+- **Pronto quando**: o nome da sessão contada está fixado (e documentado no README)
+  e o resumo bate com o número de salas jogadas em uma execução real; há teste JVM
+  cobrindo reentrada na sessão sem sala nova.
+
+**0b. Teclado do campo `Limite (min)` fechava a cada tecla.** Corrigido no
+PR [#31](https://github.com/USPThiago/automacao-cliques-android/pull/31)
+(`fullScroll` do log roubava o foco do campo); falta confirmar no aparelho.
+
+- **Pronto quando**: digitar vários dígitos mantém o teclado aberto e ele só fecha
+  no botão Concluir.
+
 ### 1. Validação end-to-end do MVP 4 em aparelho real
 
 Nada do MVP 4 em diante foi executado em aparelho ou emulador: os 81 testes são todos
