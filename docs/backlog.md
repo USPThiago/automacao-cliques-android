@@ -47,12 +47,19 @@ A impressão é que até a versão anterior o número estava correto.
   e o resumo bate com o número de salas jogadas em uma execução real; há teste JVM
   cobrindo reentrada na sessão sem sala nova.
 
-**0b. Teclado do campo `Limite (min)` fechava a cada tecla.** Corrigido no
-PR [#31](https://github.com/USPThiago/automacao-cliques-android/pull/31)
-(`fullScroll` do log roubava o foco do campo); falta confirmar no aparelho.
+**0b. Campo `Limite (min)` gera uma linha de log por tecla.** O fechamento do
+teclado a cada tecla foi corrigido no
+PR [#31](https://github.com/USPThiago/automacao-cliques-android/pull/31) e
+confirmado no aparelho, mas expôs o efeito colateral: `doAfterTextChanged` em
+`MainActivity` grava `Limite de tempo` a cada dígito. Digitar `11111` produz cinco
+linhas (`1`, `11`, `111`, `1111`, `11111`).
 
-- **Pronto quando**: digitar vários dígitos mantém o teclado aberto e ele só fecha
-  no botão Concluir.
+- Correção esperada: registrar (e persistir em `prefs.runLimitMinutes`) só quando a
+  edição termina — no `actionDone` do teclado (`setOnEditorActionListener`) e/ou na
+  perda de foco (`setOnFocusChangeListener`) — em vez de a cada alteração de texto.
+  Manter o valor efetivo lido no Iniciar.
+- **Pronto quando**: digitar `11111` e tocar em Concluir gera uma única linha
+  `Limite de tempo: 11111 min`; o valor continua salvo ao sair do app.
 
 ### 1. Validação end-to-end do MVP 4 em aparelho real
 
