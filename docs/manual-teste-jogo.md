@@ -281,14 +281,28 @@ Total de salas: 0
 Tempo total: 00:00:02
 Quantidade de cliques: 1
 Recuperacoes onLocateFailure: 0
+Sessao: teste do recorte min(1) max(1) freq(1)
 ```
 
 `Tempo desde ultimo clique` aparece antes do `Clique` sempre que houve um clique
-anterior na execução (no primeiro clique a linha é omitida). As quatro linhas finais
+anterior na execução (no primeiro clique a linha é omitida). As linhas finais
 (`Total de salas`, `Tempo total` em HH:MM:SS, `Quantidade de cliques` e
 `Recuperacoes onLocateFailure`, total de entradas em sessão de recuperação) encerram o log
 em **qualquer** encerramento — sucesso, falha ou cancelamento, inclusive quando a
 execução morre na carga inicial.
+
+Depois delas vem **uma linha por sessão visitada**, na ordem da primeira visita, com
+as tentativas em que cada passagem localizou uma ação: `Sessao: <nome> min(<a>)
+max(<b>) freq(<c>)` — menor, maior e valor(es) mais frequente(s); em empate todos
+aparecem em ordem crescente (`freq(3,5)`). Passagens que esgotaram as tentativas não
+entram na amostra e uma sessão sem nenhuma localização sai como `min(-) max(-)
+freq(-)`. Exemplo: dez passagens localizadas nas tentativas 3,5,6,5,1,3,4,6,5,1 dão
+`Sessao: A min(1) max(6) freq(5)`. Serve para calibrar `retries`/`retryDelayMs`: se
+`max` encosta em `1 + retries`, o roteiro está no limite.
+
+Com o campo **Limite (min)** preenchido, ao estourar o prazo a linha
+`Execucao: interrompida por limite de X min` substitui `Execucao: parada`, e o resumo
+segue normalmente.
 
 Ações que **não** localizam o template não geram linhas: entre uma `Tentativa` e a
 próxima só aparecem `Tempo captura`/`Resolucao da tela` se nada foi localizado. Quando
@@ -451,6 +465,11 @@ o roteiro estiver conferido.
   sobrescrever a versão em uso. O par de pastas é fixado no início de cada execução:
   alternar a chave no meio de um roteiro só vale para a próxima execução. Ao alternar,
   a carga é revalidada e os caminhos exibidos na tela mudam. Padrão: desligada.
+- **Limite (min)**: inteiro ≥ 0; `0` = sem limite. Lido no Iniciar (alterar durante a
+  execução vale para a próxima). O prazo conta do início da execução; quando estoura, a
+  ação em curso é concluída (todos os cliques e o `waitAfterMs`) e a execução para antes
+  da próxima sessão — ou antes da próxima tentativa, se a sessão ainda não localizou
+  nada. Padrão: 0.
 
 ### 5.3 Validação da carga inicial
 

@@ -12,7 +12,9 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import com.example.automacaocliques.databinding.ActivityMainBinding
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
@@ -63,6 +65,14 @@ class MainActivity : AppCompatActivity() {
             showPaths()
             validateLoad()
             log.add("Modo teste", if (checked) "ligado" else "desligado")
+        }
+        binding.runLimitInput.setText(String.format(Locale.ROOT, "%d", prefs.runLimitMinutes))
+        binding.runLimitInput.doAfterTextChanged { text ->
+            // Campo vazio equivale a 0 (sem limite). Vale para a proxima execucao.
+            val minutes = text?.toString()?.toIntOrNull() ?: 0
+            if (minutes == prefs.runLimitMinutes) return@doAfterTextChanged
+            prefs.runLimitMinutes = minutes
+            log.add("Limite de tempo", if (minutes == 0) "sem limite" else "$minutes min")
         }
 
         showPaths()

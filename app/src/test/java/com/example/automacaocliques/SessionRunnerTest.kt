@@ -143,18 +143,20 @@ class SessionRunnerTest {
         name: String,
         locate: String,
         call: String? = null,
-        clicks: List<ClickPoint> = emptyList()
-    ) = SessionAction(name = name, locate = locate, call = call, clicks = clicks, waitAfterMs = 0)
+        clicks: List<ClickPoint> = emptyList(),
+        waitAfterMs: Long = 0
+    ) = SessionAction(name = name, locate = locate, call = call, clicks = clicks, waitAfterMs = waitAfterMs)
 
     private fun session(
         name: String,
         vararg actions: SessionAction,
         retries: Int = 0,
+        retryDelayMs: Long = 10,
         onLocateFailure: String? = null
     ) = Session(
         name = name,
         retries = retries,
-        retryDelayMs = 10,
+        retryDelayMs = retryDelayMs,
         actions = actions.toList(),
         onLocateFailure = onLocateFailure,
         fileName = "$name.json"
@@ -801,6 +803,179 @@ class SessionRunnerTest {
         assertEquals(RunOutcome.Cancelled, runner.run(menu, sessions))
         assertEquals(listOf("menu"), sessionLines())
         assertEquals(1, stopped.captureCount)
+    }
+
+    // --- tentativas por sessao -----------------------------------------------
+
+    @Test
+    fun `stats guarda a tentativa de cada passagem localizada por sessao`() {
+        val sessionB = session("b", action("volta", "alvo_b", call = "a"), retries = 2)
+        val sessionA = session("a", action("vai", "alvo_a", call = "b"), retries = 2)
+        val env = FakeEnv(
+            captures = mutableListOf(
+                screenWith("alvo_a"), // a: tentativa 1
+                screenWith(), screenWith(), screenWith("alvo_b"), // b: tentativa 3
+                screenWith(), screenWith("alvo_a"), // a: tentativa 2
+                screenWith(), screenWith(), screenWith() // b esgota: fora da amostra
+            ),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB)
+        )
+        val runner = SessionRunner(env, log)
+
+        assertTrue(runner.run(sessionA, env.sessions) is RunOutcome.Failure)
+        assertEquals(
+            listOf(SessionAttemptStats.of("a", 1, 2), SessionAttemptStats.of("b", 3)),
+            runner.stats().sessionAttempts
+        )
+    }
+
+    @Test
+    fun `localizacao conta mesmo quando a acao e abortada`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith(), screenWith("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap(),
+            clickOutcome = { ClickOutcome.REJECTED }
+        )
+        val main = session("menu", action("vai", "alvo_a", clicks = listOf(ClickPoint(1, 1))), retries = 1)
+        val runner = SessionRunner(env, log)
+
+        assertTrue(runner.run(main, env.sessions) is RunOutcome.Failure)
+        assertEquals(listOf(SessionAttemptStats.of("menu", 2)), runner.stats().sessionAttempts)
+    }
+
+    @Test
+    fun `sessoes homonimas em arquivos distintos tem linhas separadas`() {
+        val sessionB = session("Menu", action("fim", "alvo_b"))
+        val sessionA = session("Menu", action("vai", "alvo_a", call = "b"))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB.copy(fileName = "b.json"))
+        )
+        val runner = SessionRunner(env, log)
+
+        assertEquals(RunOutcome.Success, runner.run(sessionA.copy(fileName = "a.json"), env.sessions))
+        assertEquals(
+            listOf(SessionAttemptStats.of("Menu", 1), SessionAttemptStats.of("Menu", 1)),
+            runner.stats().sessionAttempts
+        )
+    }
+
+    @Test
+    fun `sessao visitada sem localizacao aparece com amostra vazia`() {
+        val recovery = session("recuperar", action("fecha", "alvo_b"))
+        val menu = session("menu", action("vai", "alvo_a"), onLocateFailure = "recuperar")
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith(), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("menu.json" to menu, "recuperar.json" to recovery)
+        )
+        val runner = SessionRunner(env, log)
+
+        assertEquals(RunOutcome.Success, runner.run(menu, env.sessions))
+        assertEquals(
+            listOf(SessionAttemptStats("menu"), SessionAttemptStats.of("recuperar", 1)),
+            runner.stats().sessionAttempts
+        )
+    }
+
+    @Test
+    fun `formata min max e moda das tentativas`() {
+        assertEquals(
+            "Sessao: A min(1) max(6) freq(5)",
+            formatSessionAttempts(SessionAttemptStats.of("A", 3, 5, 6, 5, 1, 3, 4, 6, 5, 1))
+        )
+        assertEquals(
+            "Sessao: A min(3) max(5) freq(3,5)",
+            formatSessionAttempts(SessionAttemptStats.of("A", 5, 3, 5, 3))
+        )
+        assertEquals("Sessao: A min(2) max(2) freq(2)", formatSessionAttempts(SessionAttemptStats.of("A", 2)))
+        assertEquals("Sessao: A min(-) max(-) freq(-)", formatSessionAttempts(SessionAttemptStats("A")))
+    }
+
+    // --- limite de minutos ---------------------------------------------------
+
+    @Test
+    fun `limite termina a acao atual e nao inicia a proxima sessao`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        // waitAfterMs de 1 min estoura o limite dentro da acao: os cliques e a
+        // espera terminam, mas 'b' nao e iniciada.
+        val sessionA = session(
+            "a",
+            action(
+                "vai",
+                "alvo_a",
+                call = "b",
+                clicks = listOf(ClickPoint(10, 20), ClickPoint(30, 40)),
+                waitAfterMs = 60_000
+            )
+        )
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB)
+        )
+        val runner = SessionRunner(env, log, timeLimitMs = 60_000)
+
+        assertEquals(RunOutcome.TimeLimit, runner.run(sessionA, env.sessions))
+        assertEquals(2, env.clicks.size)
+        assertTrue(env.sleeps.toString(), env.sleeps.sum() >= 60_000L)
+        assertEquals(1, env.captureCount)
+        assertEquals(listOf("a"), sessionLines())
+        assertTrue(log.text(), log.lines().contains("Transicao: OK"))
+        assertEquals(listOf(SessionAttemptStats.of("a", 1)), runner.stats().sessionAttempts)
+    }
+
+    @Test
+    fun `limite estourado no retryDelay para antes da proxima tentativa`() {
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith(), screenWith("alvo_a")),
+            templates = templates(),
+            sessions = emptyMap()
+        )
+        val main = session("menu", action("vai", "alvo_a"), retries = 3, retryDelayMs = 60_000)
+        val runner = SessionRunner(env, log, timeLimitMs = 60_000)
+
+        assertEquals(RunOutcome.TimeLimit, runner.run(main, env.sessions))
+        assertEquals(1, env.captureCount)
+        assertTrue(env.clicks.isEmpty())
+        assertEquals(listOf(SessionAttemptStats("menu")), runner.stats().sessionAttempts)
+    }
+
+    @Test
+    fun `limite zero nao interfere`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b", waitAfterMs = 60_000))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB)
+        )
+
+        assertEquals(
+            RunOutcome.Success,
+            SessionRunner(env, log, timeLimitMs = 0).run(sessionA, env.sessions)
+        )
+        assertEquals(listOf("a", "b"), sessionLines())
+    }
+
+    @Test
+    fun `limite nao atingido nao muda o desfecho`() {
+        val sessionB = session("b", action("fim", "alvo_b"))
+        val sessionA = session("a", action("vai", "alvo_a", call = "b", waitAfterMs = 1_000))
+        val env = FakeEnv(
+            captures = mutableListOf(screenWith("alvo_a"), screenWith("alvo_b")),
+            templates = templates(),
+            sessions = mapOf("a.json" to sessionA, "b.json" to sessionB)
+        )
+
+        assertEquals(
+            RunOutcome.Success,
+            SessionRunner(env, log, timeLimitMs = 60_000).run(sessionA, env.sessions)
+        )
+        assertEquals(2, env.clicks.size)
     }
 
     // --- modo debug ----------------------------------------------------------

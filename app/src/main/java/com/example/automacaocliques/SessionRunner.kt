@@ -22,7 +22,35 @@ sealed class RunOutcome {
 
     object Cancelled : RunOutcome()
 
+    /** Prazo de execucao esgotado; a acao em curso foi concluida antes da parada. */
+    object TimeLimit : RunOutcome()
+
     data class Failure(val reason: String) : RunOutcome()
+}
+
+/**
+ * Tentativas em que as passagens pela sessao [name] localizaram uma acao,
+ * como quantidade de passagens por numero da tentativa ([counts]). Passagens
+ * esgotadas nao entram; sessao visitada sem localizacao tem [counts] vazio.
+ */
+data class SessionAttemptStats(val name: String, val counts: Map<Int, Int> = emptyMap()) {
+
+    companion object {
+        fun of(name: String, vararg attempts: Int) =
+            SessionAttemptStats(name, attempts.asList().groupingBy { it }.eachCount())
+    }
+}
+
+/**
+ * Linha do resumo final: `Sessao: <nome> min(a) max(b) freq(c)`. Em `freq`
+ * vao todas as modas em ordem crescente; sem amostra, `-` nos tres.
+ */
+fun formatSessionAttempts(stats: SessionAttemptStats): String {
+    val counts = stats.counts
+    if (counts.isEmpty()) return "Sessao: ${stats.name} min(-) max(-) freq(-)"
+    val top = counts.values.max()
+    val modes = counts.filterValues { it == top }.keys.sorted().joinToString(",")
+    return "Sessao: ${stats.name} min(${counts.keys.min()}) max(${counts.keys.max()}) freq($modes)"
 }
 
 /** Informacoes mostradas no popup do modo debug depois dos cliques de uma acao. */
@@ -96,7 +124,9 @@ class SessionRunner(
     private val env: RunnerEnvironment,
     private val log: ExecutionLog,
     /** Fonte de aleatoriedade do `clickArea`, injetavel nos testes. */
-    private val random: Random = Random.Default
+    private val random: Random = Random.Default,
+    /** Prazo da execucao a partir de [run]; `0` = sem limite. */
+    private val timeLimitMs: Long = 0L
 ) {
 
     @Volatile
@@ -120,6 +150,22 @@ class SessionRunner(
     /** Entradas em sessao de `onLocateFailure`, para o resumo final. */
     private var locateFailures = 0
 
+    /**
+     * Por arquivo de sessao, na ordem da primeira visita, quantas passagens
+     * localizaram uma acao em cada numero de tentativa.
+     */
+    private val sessionAttempts = LinkedHashMap<String, SessionAttemptCounter>()
+
+    private class SessionAttemptCounter(val name: String) {
+        val counts = sortedMapOf<Int, Int>()
+
+        fun record(attempt: Int) {
+            counts[attempt] = (counts[attempt] ?: 0) + 1
+        }
+
+        fun snapshot() = SessionAttemptStats(name, counts.toMap())
+    }
+
     fun cancel() {
         cancelled = true
     }
@@ -129,12 +175,19 @@ class SessionRunner(
         val resultadoSessions: Int,
         val clicksSent: Int,
         val locateFailures: Int,
-        val elapsedMs: Long
+        val elapsedMs: Long,
+        /** Tentativas em que houve localizacao, por sessao, na ordem de primeira visita. */
+        val sessionAttempts: List<SessionAttemptStats> = emptyList()
     )
 
     /** Contadores do processamento; validos mesmo apos falha ou cancelamento. */
-    fun stats(): RunStats =
-        RunStats(resultadoSessions, clicksSent, locateFailures, env.elapsedMs() - runStart)
+    fun stats(): RunStats = RunStats(
+        resultadoSessions,
+        clicksSent,
+        locateFailures,
+        env.elapsedMs() - runStart,
+        sessionAttempts.values.map { it.snapshot() }
+    )
 
     /**
      * Executa o grafo ja validado na carga inicial: [sessions] mapeia nome de
@@ -161,13 +214,16 @@ class SessionRunner(
         var locateFailureArmed = true
 
         while (true) {
+            if (timeLimitReached()) return RunOutcome.TimeLimit
             if (session.name == RESULTADO_SESSION) resultadoSessions++
             log.add("Sessao", session.name)
+            sessionAttempts.getOrPut(session.fileName) { SessionAttemptCounter(session.name) }
 
             var next: Session? = null
             var attempt = 1
             while (attempt <= session.attempts) {
                 if (cancelled) return cancelledOutcome()
+                if (attempt > 1 && timeLimitReached()) return RunOutcome.TimeLimit
                 log.add("Tentativa", "$attempt de ${session.attempts}")
 
                 when (val outcome = attempt(session, attempt)) {
@@ -216,6 +272,10 @@ class SessionRunner(
         }
     }
 
+    /** `true` quando ha limite e o prazo desde o inicio de [run] ja passou. */
+    private fun timeLimitReached(): Boolean =
+        timeLimitMs > 0 && env.elapsedMs() - runStart >= timeLimitMs
+
     private fun cancelledOutcome(): RunOutcome {
         log.addError("Execucao", "interrompida pelo usuario")
         return RunOutcome.Cancelled
@@ -257,6 +317,7 @@ class SessionRunner(
 
             // Acoes que nao localizam o template nao geram linhas no log.
             val located = locate(screen, action, scale) ?: continue
+            sessionAttempts.getValue(session.fileName).record(attempt)
             val match = located.match
 
             log.add("Acao", action.name)

@@ -94,10 +94,11 @@ class ClickAccessibilityService : AccessibilityService() {
         val debugEnabled = prefs.debugEnabled
         val highlightsEnabled = prefs.highlightsEnabled
         val testMode = prefs.testMode
+        val runLimitMinutes = prefs.runLimitMinutes
         log.enabled = prefs.logEnabled
         runnerExecutor.execute {
             try {
-                execute(debugEnabled, highlightsEnabled, testMode)
+                execute(debugEnabled, highlightsEnabled, testMode, runLimitMinutes)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro inesperado durante execucao", e)
                 log.addError("Execucao", "erro inesperado: ${e.message}")
@@ -118,7 +119,12 @@ class ClickAccessibilityService : AccessibilityService() {
         mainHandler.post { debugOverlay.dismiss() }
     }
 
-    private fun execute(debugEnabled: Boolean, highlightsEnabled: Boolean, testMode: Boolean) {
+    private fun execute(
+        debugEnabled: Boolean,
+        highlightsEnabled: Boolean,
+        testMode: Boolean,
+        runLimitMinutes: Int
+    ) {
         val startedAt = SystemClock.elapsedRealtime()
         var sessionRunner: SessionRunner? = null
         try {
@@ -154,7 +160,8 @@ class ClickAccessibilityService : AccessibilityService() {
                             highlightsEnabled,
                             checkNotNull(runTemplates)
                         ),
-                        log
+                        log,
+                        timeLimitMs = runLimitMinutes * 60_000L
                     )
                     runner = sessionRunner
                     // Parada pedida enquanto o executor era criado ou durante a
@@ -163,6 +170,8 @@ class ClickAccessibilityService : AccessibilityService() {
                     when (val outcome = sessionRunner.run(load.main, load.sessions)) {
                         RunOutcome.Success -> log.addError("Execucao", "concluida com sucesso")
                         RunOutcome.Cancelled -> log.addError("Execucao", "parada")
+                        RunOutcome.TimeLimit ->
+                            log.addError("Execucao", "interrompida por limite de $runLimitMinutes min")
                         is RunOutcome.Failure ->
                             log.addError("Execucao", "encerrada: ${outcome.reason}")
                     }
@@ -411,13 +420,17 @@ class ClickAccessibilityService : AccessibilityService() {
     /**
      * Resumo do processamento, sempre as ultimas linhas do log: salas (sessoes
      * `Resultado` iniciadas), tempo total em HH:MM:SS, cliques enviados e
-     * entradas em sessao de `onLocateFailure`.
+     * entradas em sessao de `onLocateFailure` e, por sessao visitada, as
+     * tentativas em que houve localizacao (min/max/moda).
      */
     private fun logSummary(stats: SessionRunner.RunStats) {
         log.addError("Total de salas", stats.resultadoSessions.toString())
         log.addError("Tempo total", formatElapsed(stats.elapsedMs))
         log.addError("Quantidade de cliques", stats.clicksSent.toString())
         log.addError("Recuperacoes onLocateFailure", stats.locateFailures.toString())
+        stats.sessionAttempts.forEach { attempts ->
+            log.addError(formatSessionAttempts(attempts))
+        }
     }
 
     private fun formatElapsed(ms: Long): String {
