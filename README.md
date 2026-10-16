@@ -235,7 +235,8 @@ alternar no meio do roteiro so vale para a proxima.
   `sessions_teste/<arquivo>.json` no esquema da spec; ao renomear, oferece
   atualizar `call`/`onLocateFailure`. O botao de alvo de T5 mostra as
   coordenadas sobre a tela pelo servico de acessibilidade (precisa estar
-  ativo).
+  ativo); o editor vai para segundo plano, deixando o app alvo visivel, e
+  volta ao tocar **Fechar previa**.
 
 `sessions_teste/.run_complete` e gravado quando uma execucao em modo teste
 termina com sucesso e apagado a cada alteracao do editor em `sessions_teste/`.

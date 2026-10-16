@@ -36,7 +36,7 @@ class TemplatesFragment : EditorFragment(R.layout.fragment_templates) {
         val thumbPx = (32 * resources.displayMetrics.density).toInt()
         editor.background({
             val store = storage.templates
-            storage.templateFiles().map { Item(it, store.sizeOf(it.name), decodeThumbnail(it, thumbPx)) }
+            storage.templateFiles().sortedBy { it.nameWithoutExtension.lowercase() }.map { Item(it, store.sizeOf(it.name), decodeThumbnail(it, thumbPx)) }
         }) { result ->
             val view = binding ?: return@background
             items = result.getOrDefault(emptyList())
@@ -58,7 +58,7 @@ class TemplatesFragment : EditorFragment(R.layout.fragment_templates) {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val item = items[position]
-            holder.binding.title.text = item.file.name
+            holder.binding.title.text = item.file.nameWithoutExtension.lowercase()
             holder.binding.subtitle.text = sizeText(requireContext(), item.size)
             holder.binding.thumbnail.setImageBitmap(item.thumbnail)
             holder.binding.viewButton.setOnClickListener { TemplateSheet.show(requireContext(), item.file) }

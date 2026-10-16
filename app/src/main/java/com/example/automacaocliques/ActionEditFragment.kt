@@ -187,6 +187,8 @@ class ActionEditFragment : EditorFragment(R.layout.fragment_action_edit) {
             editor.toast(getString(R.string.preview_scaled_toast, reference.describe(), display.describe()))
         }
         service.showCoordinatePreview(CoordinatePreview(searchArea, clickArea, clicks, reference, firstNumber))
+        // Deixa o app alvo visivel sob a previa; "Fechar previa" traz o editor de volta.
+        requireActivity().moveTaskToBack(true)
     }
 
     private fun layoutFor(field: String?): TextInputLayout? {

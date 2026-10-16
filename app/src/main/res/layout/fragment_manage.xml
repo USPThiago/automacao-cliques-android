@@ -54,50 +54,47 @@
 
         <TextView style="@style/EditorSection" android:text="@string/section_import" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/importSessionButton"
-            style="@style/EditorAction"
+            style="@style/EditorLink"
             android:text="@string/import_session" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/importTemplateButton"
-            style="@style/EditorAction"
+            style="@style/EditorLink"
             android:text="@string/import_template" />
 
         <TextView style="@style/EditorSection" android:text="@string/section_export" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/exportSessionsButton"
-            style="@style/EditorAction"
+            style="@style/EditorLink"
             android:text="@string/export_sessions" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/exportTemplatesButton"
-            style="@style/EditorAction"
+            style="@style/EditorLink"
             android:text="@string/export_templates" />
 
         <TextView style="@style/EditorSection" android:text="@string/section_move" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/moveTestToMainButton"
-            style="@style/EditorAction"
+            style="@style/EditorLink"
             android:text="@string/move_test_to_main" />
 
         <TextView style="@style/EditorHelp" android:text="@string/move_test_to_main_help" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/moveMainToTestButton"
-            style="@style/EditorAction"
-            android:layout_marginTop="8dp"
+            style="@style/EditorLink"
             android:text="@string/move_main_to_test" />
 
         <TextView style="@style/EditorSection" android:text="@string/section_validate" />
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/validateButton"
-            style="@style/Widget.Material3.Button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            style="@style/EditorLink"
             android:text="@string/validate_scripts" />
 
         <TextView style="@style/EditorSection" android:text="@string/section_edit" />

@@ -109,6 +109,8 @@ class ScriptEditorActivity : AppCompatActivity() {
         model.sessionSaved = draft.deepCopy()
         model.sessionFile = fileName?.takeIf { text != null }
         model.sessionTarget = link?.let { ValidationErrors.targetOf(draft, it) to message }
+        // Vindo do popup de erros de T1, T2 entra na pilha para que Confirmar/Cancelar voltem a ela.
+        if (link != null) show(SessionListFragment())
         show(SessionEditFragment())
     }
 

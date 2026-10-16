@@ -41,14 +41,10 @@
         <item name="android:minHeight">48dp</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:textAppearance">@style/TextAppearance.Material3.BodyLarge</item>
-        <item name="android:textColor">?android:attr/textColorLink</item>
+        <item name="android:textColor">@color/editor_link</item>
         <item name="android:background">?attr/selectableItemBackground</item>
     </style>
 
-    <style name="EditorAction" parent="Widget.Material3.Button.TonalButton">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-    </style>
 
     <style name="EditorIconButton" parent="Widget.Material3.Button.TextButton">
         <item name="android:layout_width">48dp</item>

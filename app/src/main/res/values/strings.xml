@@ -71,8 +71,8 @@
     <string name="target_landscape">Paisagem</string>
     <string name="target_portrait">Retrato</string>
     <string name="target_orientation_help">Usada por Validar scripts e Mover testes → principal para conferir as coordenadas com a tela do aparelho nessa orientação. A execução usa sempre a tela real.</string>
-    <string name="mode_active_test">Modo ativo: TESTE (sessions_teste/ e templates_teste/)</string>
-    <string name="mode_active_main">Modo ativo: PRINCIPAL (sessions/ e templates/)</string>
+    <string name="mode_active_test">Modo teste</string>
+    <string name="mode_active_main">Modo principal</string>
     <string name="section_import">Importar</string>
     <string name="import_session">Importar sessão (.json) para sessions_teste/</string>
     <string name="import_template">Importar template (PNG/JPG) para templates/</string>
@@ -111,11 +111,11 @@
     <string name="sessions_title">Sessões (sessions_teste/)</string>
     <string name="search_sessions">Buscar por nome ou arquivo</string>
     <string name="sessions_order_help">A ordem é visual; o roteiro é definido pelos campos call.</string>
-    <string name="sessions_empty">Nenhuma sessão em sessions_teste/. Toque em + para criar.</string>
+    <string name="sessions_empty">Nenhuma sessão encontrada. Toque em + para criar.</string>
     <string name="session_unnamed">(sem nome)</string>
-    <string name="delete_session_title">Excluir %1$s?</string>
-    <string name="delete_session_message">O arquivo será apagado de sessions_teste/.</string>
-    <string name="delete_session_refs">O arquivo será apagado de sessions_teste/. Estas referências ficarão quebradas:\n%1$s</string>
+    <string name="delete_session_title">Excluir sessão \'%1$s\'?</string>
+    <string name="delete_session_message">Esta ação não pode ser desfeita.</string>
+    <string name="delete_session_refs">Esta ação não pode ser desfeita.\n\nEstas referências ficarão quebradas:\n%1$s</string>
 
     <!-- T3 Templates -->
     <string name="templates_title">Templates (templates/)</string>

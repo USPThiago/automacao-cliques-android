@@ -109,7 +109,7 @@ class SessionListFragment : EditorFragment(R.layout.fragment_session_list) {
             } else {
                 getString(R.string.delete_session_refs, refs.joinToString("\n") { "• ${it.describe()}" })
             }
-            editor.confirm(getString(R.string.delete_session_title, item.file), message, R.string.delete) {
+            editor.confirm(getString(R.string.delete_session_title, item.name.ifBlank { item.file }), message, R.string.delete) {
                 storage.delete(item.file)
                 prefs.editorSessionOrder = prefs.editorSessionOrder - item.file
                 reload()
