@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/leftLayout"
+            style="@style/EditorField"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:hint="@string/area_left">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/left"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/topLayout"
+            style="@style/EditorField"
+            android:layout_width="0dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:hint="@string/area_top">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/top"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/rightLayout"
+            style="@style/EditorField"
+            android:layout_width="0dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:hint="@string/area_right">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/right"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/bottomLayout"
+            style="@style/EditorField"
+            android:layout_width="0dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:hint="@string/area_bottom">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/bottom"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/previewButton"
+            style="@style/EditorIconButton"
+            android:layout_marginTop="8dp"
+            android:contentDescription="@string/desc_target"
+            android:text="@string/icon_target" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/error"
+        style="@style/EditorHelp"
+        android:textColor="?attr/colorError"
+        android:visibility="gone" />
+</LinearLayout>

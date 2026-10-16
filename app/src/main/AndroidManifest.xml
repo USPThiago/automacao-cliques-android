@@ -19,6 +19,15 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ScriptEditorActivity"
+            android:exported="false"
+            android:label="@string/editor_title"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AutomacaoCliques.Editor"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".ClickAccessibilityService"
             android:exported="true"

@@ -190,8 +190,10 @@ visivel):
 - **Iniciar** (valida a carga e espera ate 15 s o app alvo chegar ao primeiro
   plano antes da primeira captura; a troca de app e feita pelo usuario),
   **Parar**, **Limpar** e **Copiar**;
-- chaves **Modo debug** (ver abaixo), **Retangulos na tela**, **Gravar log** e
-  **Modo teste**, e o campo **Limite (min)**, todos persistidos entre execucoes;
+- chaves **Modo debug** (ver abaixo), **Retangulos na tela** e **Gravar log**,
+  e o campo **Limite (min)**, todos persistidos entre execucoes;
+- botao **Editor de sessoes**, que abre o editor (ver abaixo); a chave
+  **Modo teste** fica na tela de Gestao de pastas do editor;
 - caixa de log com as ultimas 500 linhas, mantida pelo servico (sobrevive ao
   fechamento da tela) e espelhada no Logcat com a tag `ClickService`.
 
@@ -210,9 +212,32 @@ o Logcat e as linhas de erro/resultado continuam sempre.
 
 **Modo teste**: le sessoes e templates das pastas `sessions_teste/` e
 `templates_teste/`, ao lado das originais. Permite ajustar e testar roteiros
-sem sobrescrever a versao em uso; ao alternar, a carga e revalidada e os
-caminhos exibidos mudam. O par de pastas e fixado no inicio de cada execucao:
+sem sobrescrever a versao em uso; a chave fica em T1 do editor e, ao voltar
+para a tela inicial, a carga e revalidada e os caminhos exibidos mudam. O par de pastas e fixado no inicio de cada execucao:
 alternar no meio do roteiro so vale para a proxima.
+
+**Editor de sessoes** (`ScriptEditorActivity`, retrato):
+
+- **T1 Gestao de pastas**: chave e indicador do modo ativo; importar sessao
+  (`.json` -> `sessions_teste/`) e template (PNG/JPG -> `templates/`);
+  exportar `sessions/` e `templates/` para uma pasta escolhida; **Mover testes
+  -> principal** (so habilitado com `sessions_teste/.run_complete`, valida
+  antes de copiar) e **Mover principal -> testes**; **Validar scripts**
+  (`sessions_teste/` + `templates/`), com erros clicaveis que abrem o campo no
+  editor; links para T2 e T3.
+- **T2 Sessoes** (`sessions_teste/`): busca, ordem visual (nao altera o
+  roteiro, definido pelos campos `call`), exclusao com aviso de referencias;
+  `mainSession.json` nao pode ser excluido.
+- **T3 Templates** (`templates/`): miniaturas e visualizacao em tamanho real
+  com zoom.
+- **T4 Sessao** e **T5 Acao**: formularios com validacao inline, salvos em
+  `sessions_teste/<arquivo>.json` no esquema da spec; ao renomear, oferece
+  atualizar `call`/`onLocateFailure`. O botao de alvo de T5 mostra as
+  coordenadas sobre a tela pelo servico de acessibilidade (precisa estar
+  ativo).
+
+`sessions_teste/.run_complete` e gravado quando uma execucao em modo teste
+termina com sucesso e apagado a cada alteracao do editor em `sessions_teste/`.
 
 **Limite (min)**: inteiro >= 0; `0` (padrao) = sem limite. Lido no Iniciar,
 como as chaves (alterar durante a execucao vale para a proxima). O prazo conta

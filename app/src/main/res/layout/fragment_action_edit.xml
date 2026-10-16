@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="88dp">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/nameLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_action_name">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/nameInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/locateLayout"
+                style="@style/EditorField"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:hint="@string/field_locate">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/locateInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:completionThreshold="1"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/viewTemplateButton"
+                style="@style/EditorIconButton"
+                android:layout_marginTop="8dp"
+                android:contentDescription="@string/desc_view"
+                android:text="@string/icon_view" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/thresholdSlider"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_weight="1"
+                android:contentDescription="@string/field_threshold"
+                android:stepSize="0.01"
+                android:valueFrom="0"
+                android:valueTo="1" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/thresholdLayout"
+                style="@style/EditorField"
+                android:layout_width="96dp"
+                android:hint="@string/field_threshold">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/thresholdInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/scalesLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_scales">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/scalesInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView style="@style/EditorHelp" android:text="@string/scales_help" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_search_area" />
+
+        <include
+            android:id="@+id/searchArea"
+            layout="@layout/view_area_fields" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_click" />
+
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/clickModeGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/modeCenter"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/click_mode_center" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/modePoints"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/click_mode_points" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/modeArea"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/click_mode_area" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <TextView style="@style/EditorHelp" android:text="@string/click_mode_help" />
+
+        <LinearLayout
+            android:id="@+id/clicksSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/clicksError"
+                style="@style/EditorHelp"
+                android:textColor="?attr/colorError"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/clicksList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addClickButton"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/add_click"
+                app:icon="@drawable/ic_add" />
+        </LinearLayout>
+
+        <include
+            android:id="@+id/clickArea"
+            layout="@layout/view_area_fields" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/clickIntervalLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_click_interval">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/clickIntervalInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/waitAfterLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_wait_after">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/waitAfterInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/callLayout"
+            style="@style/EditorDropdown"
+            android:hint="@string/field_call">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/callInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+    </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/cancelButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/confirmButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/confirm" />
+    </LinearLayout>
+</LinearLayout>

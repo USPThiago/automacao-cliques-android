@@ -57,6 +57,7 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /** Retangulos de busca/match da execucao; so e tocado na thread principal. */
     private val highlightOverlay by lazy { HighlightOverlay(this) }
+    private val coordinatePreview by lazy { CoordinatePreviewOverlay(this) }
 
     /**
      * Pedido de parada valido durante toda a execucao, inclusive antes de o
@@ -77,6 +78,14 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /** Indica se um roteiro esta em execucao. */
     fun isExecuting(): Boolean = running.get()
+
+    /**
+     * Mostra a previa de coordenadas do editor; o botao de fechar traz o
+     * editor de volta ao primeiro plano. Chamar na thread principal.
+     */
+    fun showCoordinatePreview(preview: CoordinatePreview) {
+        coordinatePreview.show(preview) { bringToFront(ScriptEditorActivity::class.java) }
+    }
 
     /**
      * Valida a carga inicial e executa o roteiro a partir de
@@ -158,6 +167,7 @@ class ClickAccessibilityService : AccessibilityService() {
                         ServiceEnvironment(
                             debugEnabled,
                             highlightsEnabled,
+                            testMode,
                             checkNotNull(runTemplates)
                         ),
                         log,
@@ -292,8 +302,13 @@ class ClickAccessibilityService : AccessibilityService() {
     private inner class ServiceEnvironment(
         private val debugEnabled: Boolean,
         private val highlightsEnabled: Boolean,
+        private val testMode: Boolean,
         private val templates: TemplateStore
     ) : RunnerEnvironment {
+
+        override fun runCompleted() {
+            if (testMode) markRunComplete(this@ClickAccessibilityService)
+        }
 
         override fun capture(): Capture {
             val queue = ArrayBlockingQueue<Capture>(1)
@@ -444,13 +459,20 @@ class ClickAccessibilityService : AccessibilityService() {
 
     /** Traz a tela do app de volta ao primeiro plano depois do Cancel do modo debug. */
     private fun bringAppToFront() {
-        val intent = Intent(this, MainActivity::class.java)
+        if (!bringToFront(MainActivity::class.java)) {
+            log.addError("Debug", "nao foi possivel trazer o app para o primeiro plano")
+        }
+    }
+
+    private fun bringToFront(activity: Class<*>): Boolean {
+        val intent = Intent(this, activity)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-        try {
+        return try {
             startActivity(intent)
+            true
         } catch (e: RuntimeException) {
             Log.e(TAG, "Falha ao trazer o app para o primeiro plano", e)
-            log.addError("Debug", "nao foi possivel trazer o app para o primeiro plano")
+            false
         }
     }
 
@@ -465,6 +487,7 @@ class ClickAccessibilityService : AccessibilityService() {
         mainHandler.removeCallbacksAndMessages(null)
         debugOverlay.hide()
         highlightOverlay.hide()
+        coordinatePreview.hide()
         synchronized(this) {
             runnerExecutor.shutdownNow()
             captureExecutor.shutdownNow()

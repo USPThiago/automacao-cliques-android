@@ -114,13 +114,14 @@ roteiro de MVPs do README como MVP 5.
 
 ### 5. Edição das sessões pela própria interface
 
-Hoje o roteiro só existe como arquivo em `files/sessions/`, editado via `adb` ou
-gerenciador de arquivos. Também previsto como MVP 5.
+Implementado no editor de sessões (`ScriptEditorActivity`, T1–T5): gestão de
+pastas, lista de sessões, templates, edição de sessão e de ação com prévia de
+coordenadas. Falta validar em aparelho real.
 
-- Mínimo útil: listar as sessões instaladas, abrir uma, editar o JSON com validação
-  antes de salvar (reaproveitar `SessionValidator`) e criar `mainSession.json` a
-  partir de um modelo.
-- **Pronto quando**: um roteiro novo pode ser criado sem computador.
+- Pendente: retirar `templates_teste/` do projeto (o editor e a validação já
+  usam apenas `templates/`).
+- **Pronto quando**: um roteiro novo pode ser criado sem computador (validar
+  em aparelho).
 
 ### 6. Escalas amplas acessíveis ao usuário
 

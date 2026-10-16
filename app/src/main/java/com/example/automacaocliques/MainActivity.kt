@@ -28,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private val log = ClickAccessibilityService.log
     private val prefs by lazy { AppPreferences(this) }
     private var pendingStart = false
+    private var shownTestMode: Boolean? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,14 +57,8 @@ class MainActivity : AppCompatActivity() {
             log.enabled = checked
             log.add("Gravacao do log", if (checked) "ligada" else "desligada")
         }
-        binding.testModeSwitch.isChecked = prefs.testMode
-        binding.testModeSwitch.setOnCheckedChangeListener { _, checked ->
-            // Uma execucao em andamento nao e afetada: as pastas sao fixadas
-            // no inicio. O toggle vale para a proxima validacao/execucao.
-            prefs.testMode = checked
-            showPaths()
-            validateLoad()
-            log.add("Modo teste", if (checked) "ligado" else "desligado")
+        binding.openEditorButton.setOnClickListener {
+            startActivity(Intent(this, ScriptEditorActivity::class.java))
         }
         binding.runLimitInput.setText(String.format(Locale.ROOT, "%d", prefs.runLimitMinutes))
         binding.runLimitInput.doAfterTextChanged { text ->
@@ -74,12 +69,17 @@ class MainActivity : AppCompatActivity() {
             log.add("Limite de tempo", if (minutes == 0) "sem limite" else "$minutes min")
         }
 
-        showPaths()
-        validateLoad()
     }
 
     override fun onResume() {
         super.onResume()
+        // O modo teste e trocado no editor (T1): caminhos e carga refletem o atual.
+        val testMode = prefs.testMode
+        if (testMode != shownTestMode) {
+            shownTestMode = testMode
+            showPaths()
+            validateLoad()
+        }
         updateStatus()
         log.listener = { runOnUiThread(::showLog) }
         showLog()
