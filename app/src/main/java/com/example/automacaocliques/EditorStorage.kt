@@ -144,10 +144,12 @@ class EditorStorage(private val context: Context) {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 temp.outputStream().use { input.copyTo(it) }
             } ?: throw IOException("nao foi possivel abrir $uri")
+            // rename(2) substitui o destino atomicamente; em falha, nada antigo foi apagado.
+            val target = File(dir, name)
+            if (!temp.renameTo(target)) throw IOException("nao foi possivel gravar $name")
             dir.listFiles()
-                ?.filter { it.isFile && it != temp && it.nameWithoutExtension.lowercase() == key }
+                ?.filter { it.isFile && it != target && it.nameWithoutExtension.lowercase() == key }
                 ?.forEach { it.delete() }
-            if (!temp.renameTo(File(dir, name))) throw IOException("nao foi possivel gravar $name")
         } finally {
             temp.delete()
         }
