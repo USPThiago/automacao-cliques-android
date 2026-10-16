@@ -30,10 +30,20 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_TEST_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_TEST_MODE, value).apply()
 
+    /** Orientacao do app alvo usada pelo editor para validar as coordenadas. */
+    var targetLandscape: Boolean
+        get() = prefs.getBoolean(KEY_TARGET_LANDSCAPE, true)
+        set(value) = prefs.edit().putBoolean(KEY_TARGET_LANDSCAPE, value).apply()
+
     /** Limite de duracao da execucao, em minutos; `0` = sem limite. */
     var runLimitMinutes: Int
         get() = prefs.getInt(KEY_RUN_LIMIT_MINUTES, 0)
         set(value) = prefs.edit { putInt(KEY_RUN_LIMIT_MINUTES, value) }
+
+    /** Ordem visual da lista de sessoes do editor (nomes de arquivo). */
+    var editorSessionOrder: List<String>
+        get() = prefs.getString(KEY_EDITOR_SESSION_ORDER, "").orEmpty().split('/').filter { it.isNotEmpty() }
+        set(value) = prefs.edit { putString(KEY_EDITOR_SESSION_ORDER, value.joinToString("/")) }
 
     private companion object {
         const val NAME = "automacao"
@@ -41,6 +51,8 @@ class AppPreferences(context: Context) {
         const val KEY_HIGHLIGHTS_ENABLED = "highlights_enabled"
         const val KEY_LOG_ENABLED = "log_enabled"
         const val KEY_TEST_MODE = "test_mode"
+        const val KEY_TARGET_LANDSCAPE = "target_landscape"
         const val KEY_RUN_LIMIT_MINUTES = "run_limit_minutes"
+        const val KEY_EDITOR_SESSION_ORDER = "editor_session_order"
     }
 }

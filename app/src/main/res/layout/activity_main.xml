@@ -78,12 +78,13 @@
                 android:layout_gravity="center_horizontal"
                 android:text="@string/log_mode" />
 
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/testModeSwitch"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/openEditorButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:text="@string/test_mode" />
+                android:text="@string/open_editor" />
 
             <LinearLayout
                 android:layout_width="wrap_content"

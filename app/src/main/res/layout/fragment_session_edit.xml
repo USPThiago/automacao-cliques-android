@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="88dp">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/nameLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_session_name">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/nameInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/fileLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_file"
+            app:suffixText="@string/file_suffix">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/fileInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:digits="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView style="@style/EditorSection" android:text="@string/section_screen" />
+
+        <TextView style="@style/EditorHelp" android:text="@string/screen_help" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/screenWidthLayout"
+                style="@style/EditorField"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:hint="@string/field_screen_width">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/screenWidthInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/screenHeightLayout"
+                style="@style/EditorField"
+                android:layout_width="0dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="@string/field_screen_height">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/screenHeightInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/retriesLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_retries">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/retriesInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/retryDelayLayout"
+            style="@style/EditorField"
+            android:hint="@string/field_retry_delay">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/retryDelayInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/onLocateFailureLayout"
+            style="@style/EditorDropdown"
+            android:hint="@string/field_on_locate_failure">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/onLocateFailureInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView style="@style/EditorSection" android:text="@string/section_actions" />
+
+        <TextView style="@style/EditorHelp" android:text="@string/actions_order_help" />
+
+        <TextView
+            android:id="@+id/actionsError"
+            style="@style/EditorHelp"
+            android:textColor="?attr/colorError"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/actionsEmpty"
+            style="@style/EditorHelp"
+            android:layout_marginTop="16dp"
+            android:text="@string/actions_empty"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/actionsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="-16dp"
+            android:nestedScrollingEnabled="false" />
+    </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/addButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="@string/desc_add"
+        android:src="@drawable/ic_add" />
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/cancelButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/confirmButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/confirm" />
+    </LinearLayout>
+</LinearLayout>

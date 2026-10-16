@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/number"
+        android:layout_width="28dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/xLayout"
+        style="@style/EditorField"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:hint="@string/click_x">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/x"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberSigned" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/yLayout"
+        style="@style/EditorField"
+        android:layout_width="0dp"
+        android:layout_marginStart="4dp"
+        android:layout_weight="1"
+        android:hint="@string/click_y">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/y"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberSigned" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/delayLayout"
+        style="@style/EditorField"
+        android:layout_width="0dp"
+        android:layout_marginStart="4dp"
+        android:layout_weight="1.2"
+        android:hint="@string/click_delay">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/delay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/previewButton"
+        style="@style/EditorIconButton"
+        android:layout_marginTop="8dp"
+        android:contentDescription="@string/desc_target"
+        android:text="@string/icon_target" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/deleteButton"
+        style="@style/EditorIconButton"
+        android:layout_marginTop="8dp"
+        android:contentDescription="@string/desc_delete"
+        android:text="@string/icon_delete" />
+</LinearLayout>

@@ -110,6 +110,9 @@ interface RunnerEnvironment {
 
     /** Remove os retangulos, se exibidos. Chamado ao encerrar a execucao. */
     fun hideHighlights() = Unit
+
+    /** Rodada encerrada com [RunOutcome.Success] (marca `.run_complete` no modo teste). */
+    fun runCompleted() = Unit
 }
 
 /**
@@ -196,7 +199,7 @@ class SessionRunner(
      */
     fun run(main: Session, sessions: Map<String, Session> = emptyMap()): RunOutcome {
         return try {
-            runInternal(main, sessions)
+            runInternal(main, sessions).also { if (it == RunOutcome.Success) env.runCompleted() }
         } catch (e: Exception) {
             val reason = "erro inesperado na execucao: ${e.message}"
             log.addError("Execucao", reason)

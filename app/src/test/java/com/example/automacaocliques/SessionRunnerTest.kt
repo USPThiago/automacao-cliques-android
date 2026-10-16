@@ -67,6 +67,12 @@ class SessionRunnerTest {
             events += "esconde-retangulos"
         }
 
+        var completed = 0
+
+        override fun runCompleted() {
+            completed++
+        }
+
         override fun debugEnabled(): Boolean = debugEnabled
 
         override fun confirmStep(step: DebugStep): DebugChoice {
@@ -185,6 +191,7 @@ class SessionRunnerTest {
         assertEquals(RunOutcome.Success, outcome)
         assertEquals(1, env.clicks.size)
         assertEquals(16 to 16, env.clicks.single())
+        assertEquals(1, env.completed)
     }
 
     @Test

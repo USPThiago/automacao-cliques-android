@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/modeIndicator"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/testModeSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/test_mode_switch"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
+
+        <TextView style="@style/EditorSection" android:text="@string/target_orientation" />
+
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/targetOrientationGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/targetLandscape"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/target_landscape" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/targetPortrait"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/target_portrait" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <TextView style="@style/EditorHelp" android:text="@string/target_orientation_help" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_import" />
+
+        <TextView
+            android:id="@+id/importSessionButton"
+            style="@style/EditorLink"
+            android:text="@string/import_session" />
+
+        <TextView
+            android:id="@+id/importTemplateButton"
+            style="@style/EditorLink"
+            android:text="@string/import_template" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_export" />
+
+        <TextView
+            android:id="@+id/exportSessionsButton"
+            style="@style/EditorLink"
+            android:text="@string/export_sessions" />
+
+        <TextView
+            android:id="@+id/exportTemplatesButton"
+            style="@style/EditorLink"
+            android:text="@string/export_templates" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_move" />
+
+        <TextView
+            android:id="@+id/moveTestToMainButton"
+            style="@style/EditorLink"
+            android:text="@string/move_test_to_main" />
+
+        <TextView style="@style/EditorHelp" android:text="@string/move_test_to_main_help" />
+
+        <TextView
+            android:id="@+id/moveMainToTestButton"
+            style="@style/EditorLink"
+            android:text="@string/move_main_to_test" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_validate" />
+
+        <TextView
+            android:id="@+id/validateButton"
+            style="@style/EditorLink"
+            android:text="@string/validate_scripts" />
+
+        <TextView style="@style/EditorSection" android:text="@string/section_edit" />
+
+        <TextView
+            android:id="@+id/editSessionsLink"
+            style="@style/EditorLink"
+            android:text="@string/link_edit_sessions" />
+
+        <TextView
+            android:id="@+id/viewTemplatesLink"
+            style="@style/EditorLink"
+            android:text="@string/link_view_templates" />
+    </LinearLayout>
+</ScrollView>

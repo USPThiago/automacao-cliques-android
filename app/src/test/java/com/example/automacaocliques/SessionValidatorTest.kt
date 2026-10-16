@@ -265,4 +265,26 @@ class SessionValidatorTest {
         )
         assertTrue(reason, reason.contains("fora da tela"))
     }
+
+    @Test
+    fun `errors lista todos os problemas sem parar no primeiro`() {
+        val files = mapOf(
+            "mainSession.json" to """
+                { "name": "menu", "actions": [
+                  { "name": "a", "locate": "sumido", "call": "b" },
+                  { "name": "c", "locate": "botao", "call": "falta" } ] }
+            """.trimIndent(),
+            "b.json" to """{ "name": "b", "retries": -1, "actions": [ { "name": "x", "locate": "botao" } ] }"""
+        )
+        val errors = SessionValidator.errors(
+            source = { files[it] },
+            templates = { mapOf("botao" to Size(100, 50))[it] },
+            screen = screen
+        )
+        assertEquals(3, errors.size)
+        assertTrue(errors[0], errors[0].startsWith("mainSession.json:2: acao 'a'"))
+        assertTrue(errors[1], errors[1].startsWith("b.json:1:"))
+        assertTrue(errors[2], errors[2].startsWith("falta.json nao encontrado"))
+        assertTrue(load(files) is SessionLoad.Failure)
+    }
 }
