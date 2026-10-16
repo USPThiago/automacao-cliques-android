@@ -5,6 +5,11 @@ description: How to build, install and visually validate this Android app on an 
 
 # Testing this Android app on an emulator
 
+> **Atenção: o uso do emulador está proibido por regra do projeto.**
+> Conforme a skill `regras-de-execucao` (`.agents/skills/regras-de-execucao/SKILL.md`), não é permitido
+> executar testes end-to-end em VM/emulador. A validação padrão é por build + testes unitários.
+> O conteúdo abaixo é mantido apenas como referência para execução manual pelo usuário.
+
 ## Environment
 - SDK: `/home/ubuntu/Android/sdk` (blueprint installs cmdline-tools, platform-tools, platforms;android-34, build-tools;34.0.0; newer branches may also need `platforms;android-36` + `build-tools;36.0.0`).
   ```bash
