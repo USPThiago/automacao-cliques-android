@@ -64,18 +64,20 @@ class EditorStorage(private val context: Context) {
 
     fun runCompleteExists(): Boolean = File(testDir, RUN_COMPLETE_FILE).isFile
 
-    /** Resolucao gravada pela execucao de teste concluida, ou `null`. */
-    fun runCompleteScreen(): Size? = runCatching {
-        val (w, h) = File(testDir, RUN_COMPLETE_FILE).readText().trim().split(' ').map(String::toInt)
-        Size(w, h)
-    }.getOrNull()
-
     fun invalidateRunComplete() {
         File(testDir, RUN_COMPLETE_FILE).delete()
     }
 
     /** Erros do roteiro de `sessions_teste/` (vazio = OK), sem parar no primeiro. */
-    fun validateTestSessions(screen: Size = screenSizeOf(context)): List<String> = SessionValidator.errors(
+    /** Tela do aparelho na orientacao do app alvo definida em T1. */
+    fun targetScreen(): Size {
+        val display = screenSizeOf(context)
+        val long = maxOf(display.width, display.height)
+        val short = minOf(display.width, display.height)
+        return if (AppPreferences(context).targetLandscape) Size(long, short) else Size(short, long)
+    }
+
+    fun validateTestSessions(screen: Size = targetScreen()): List<String> = SessionValidator.errors(
         source = SessionStore(context, testMode = true),
         templates = TemplateStore(context, VALIDATION_TEMPLATES_TEST_MODE)::sizeOf,
         screen = screen

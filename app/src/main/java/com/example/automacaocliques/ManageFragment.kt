@@ -56,6 +56,10 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
             updateMode()
         }
         updateMode()
+        b.targetOrientationGroup.check(if (prefs.targetLandscape) R.id.targetLandscape else R.id.targetPortrait)
+        b.targetOrientationGroup.addOnButtonCheckedListener { _, id, checked ->
+            if (checked) prefs.targetLandscape = id == R.id.targetLandscape
+        }
         b.importSessionButton.setOnClickListener { pickSession.launch("application/json") }
         b.importTemplateButton.setOnClickListener { pickTemplate.launch("image/*") }
         b.exportSessionsButton.setOnClickListener {
@@ -151,7 +155,7 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
     }
 
     private fun moveTestToMain() {
-        editor.background({ storage.validateTestSessions(storage.runCompleteScreen() ?: screenSizeOf(requireContext())) }) { result ->
+        editor.background({ storage.validateTestSessions() }) { result ->
             val errors = result.getOrElse { listOf(it.message.orEmpty()) }
             if (errors.isNotEmpty()) {
                 editor.showValidationErrors(errors)

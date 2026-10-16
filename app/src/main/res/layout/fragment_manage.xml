@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -22,6 +23,34 @@
             android:minHeight="48dp"
             android:text="@string/test_mode_switch"
             android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
+
+        <TextView style="@style/EditorSection" android:text="@string/target_orientation" />
+
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/targetOrientationGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/targetLandscape"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/target_landscape" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/targetPortrait"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/target_portrait" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <TextView style="@style/EditorHelp" android:text="@string/target_orientation_help" />
 
         <TextView style="@style/EditorSection" android:text="@string/section_import" />
 

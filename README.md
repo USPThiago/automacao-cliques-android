@@ -218,7 +218,8 @@ alternar no meio do roteiro so vale para a proxima.
 
 **Editor de sessoes** (`ScriptEditorActivity`, retrato):
 
-- **T1 Gestao de pastas**: chave e indicador do modo ativo; importar sessao
+- **T1 Gestao de pastas**: chave e indicador do modo ativo; **Orientacao do
+  app alvo** (Paisagem, padrao, ou Retrato), usada na validacao do editor; importar sessao
   (`.json` -> `sessions_teste/`) e template (PNG/JPG -> `templates/`);
   exportar `sessions/` e `templates/` para uma pasta escolhida; **Mover testes
   -> principal** (so habilitado com `sessions_teste/.run_complete`, valida

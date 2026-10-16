@@ -67,6 +67,10 @@
     <!-- T1 Gestao de pastas -->
     <string name="manage_title">Gestão de pastas</string>
     <string name="test_mode_switch">Modo teste</string>
+    <string name="target_orientation">Orientação do app alvo</string>
+    <string name="target_landscape">Paisagem</string>
+    <string name="target_portrait">Retrato</string>
+    <string name="target_orientation_help">Usada por Validar scripts e Mover testes → principal para conferir as coordenadas com a tela do aparelho nessa orientação. A execução usa sempre a tela real.</string>
     <string name="mode_active_test">Modo ativo: TESTE (sessions_teste/ e templates_teste/)</string>
     <string name="mode_active_main">Modo ativo: PRINCIPAL (sessions/ e templates/)</string>
     <string name="section_import">Importar</string>
