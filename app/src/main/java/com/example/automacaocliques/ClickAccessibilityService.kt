@@ -150,6 +150,7 @@ class ClickAccessibilityService : AccessibilityService() {
             // orientacao usadas nela precisam ser as do app alvo, e nao as da
             // interface de automacao, que e sempre paisagem.
             val screen = screenSize()
+            val revision = if (testMode) testSessionsRevision(this) else null
             val load = SessionValidator.load(
                 SessionStore(this, testMode),
                 checkNotNull(runTemplates)::sizeOf,
@@ -168,7 +169,9 @@ class ClickAccessibilityService : AccessibilityService() {
                             debugEnabled,
                             highlightsEnabled,
                             testMode,
-                            checkNotNull(runTemplates)
+                            checkNotNull(runTemplates),
+                            revision,
+                            screen
                         ),
                         log,
                         timeLimitMs = runLimitMinutes * 60_000L
@@ -303,11 +306,15 @@ class ClickAccessibilityService : AccessibilityService() {
         private val debugEnabled: Boolean,
         private val highlightsEnabled: Boolean,
         private val testMode: Boolean,
-        private val templates: TemplateStore
+        private val templates: TemplateStore,
+        private val revision: String?,
+        private val screen: Size
     ) : RunnerEnvironment {
 
+        /** So marca se `sessions_teste/` nao mudou desde a carga do roteiro executado. */
         override fun runCompleted() {
-            if (testMode) markRunComplete(this@ClickAccessibilityService)
+            val service = this@ClickAccessibilityService
+            if (testMode && revision == testSessionsRevision(service)) markRunComplete(service, screen)
         }
 
         override fun capture(): Capture {

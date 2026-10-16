@@ -14,7 +14,7 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
     private val prefs by lazy { AppPreferences(requireContext()) }
 
     /** Exportacao confirmada aguardando a pasta escolhida no seletor. */
-    private var pendingExport: ((Uri) -> Int)? = null
+    private var pendingExport: String? = null
 
     private val pickSession = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(::importSession)
@@ -23,12 +23,27 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
         uri?.let(::importTemplate)
     }
     private val pickTree = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        val export = pendingExport
+        val kind = pendingExport
         pendingExport = null
+        val export: ((Uri) -> Int)? = when (kind) {
+            EXPORT_SESSIONS -> storage::exportSessions
+            EXPORT_TEMPLATES -> storage::exportTemplates
+            else -> null
+        }
         if (uri != null && export != null) runExport(uri, export)
     }
 
     override fun title() = R.string.manage_title
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        pendingExport = savedInstanceState?.getString(KEY_PENDING_EXPORT)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_PENDING_EXPORT, pendingExport)
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val b = FragmentManageBinding.bind(view)
@@ -44,14 +59,10 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
         b.importSessionButton.setOnClickListener { pickSession.launch("application/json") }
         b.importTemplateButton.setOnClickListener { pickTemplate.launch("image/*") }
         b.exportSessionsButton.setOnClickListener {
-            confirmExport(storage.mainSessionFiles().size, R.string.export_sessions_message) {
-                storage.exportSessions(it)
-            }
+            confirmExport(storage.mainSessionFiles().size, R.string.export_sessions_message, EXPORT_SESSIONS)
         }
         b.exportTemplatesButton.setOnClickListener {
-            confirmExport(storage.templateFiles().size, R.string.export_templates_message) {
-                storage.exportTemplates(it)
-            }
+            confirmExport(storage.templateFiles().size, R.string.export_templates_message, EXPORT_TEMPLATES)
         }
         b.moveTestToMainButton.setOnClickListener { moveTestToMain() }
         b.moveMainToTestButton.setOnClickListener { moveMainToTest() }
@@ -119,13 +130,13 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
         onConfirm
     )
 
-    private fun confirmExport(count: Int, message: Int, export: (Uri) -> Int) {
+    private fun confirmExport(count: Int, message: Int, kind: String) {
         if (count == 0) {
             editor.toast(getString(R.string.export_empty))
             return
         }
         editor.confirm(getString(R.string.export_title), getString(message, count), R.string.confirm) {
-            pendingExport = export
+            pendingExport = kind
             pickTree.launch(null)
         }
     }
@@ -140,7 +151,7 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
     }
 
     private fun moveTestToMain() {
-        editor.background({ storage.validateTestSessions() }) { result ->
+        editor.background({ storage.validateTestSessions(storage.runCompleteScreen() ?: screenSizeOf(requireContext())) }) { result ->
             val errors = result.getOrElse { listOf(it.message.orEmpty()) }
             if (errors.isNotEmpty()) {
                 editor.showValidationErrors(errors)
@@ -185,5 +196,11 @@ class ManageFragment : EditorFragment(R.layout.fragment_manage) {
                 editor.showValidationErrors(errors)
             }
         }
+    }
+
+    private companion object {
+        const val KEY_PENDING_EXPORT = "pendingExport"
+        const val EXPORT_SESSIONS = "sessions"
+        const val EXPORT_TEMPLATES = "templates"
     }
 }

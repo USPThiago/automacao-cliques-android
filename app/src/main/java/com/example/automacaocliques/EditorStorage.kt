@@ -10,10 +10,25 @@ import java.io.IOException
 /** Marca de rodada de teste concluida com sucesso, em `sessions_teste/`. */
 const val RUN_COMPLETE_FILE = ".run_complete"
 
-/** Grava `sessions_teste/.run_complete` (fim com sucesso no modo teste). */
-fun markRunComplete(context: Context) {
+/**
+ * Assinatura dos `.json` de `sessions_teste/` (nome, data, tamanho): muda
+ * quando o editor altera a pasta durante uma execucao.
+ */
+fun testSessionsRevision(context: Context): String =
+    SessionStore(context, testMode = true).directory()
+        .listFiles { f -> f.isFile && f.name.endsWith(".json") }
+        .orEmpty()
+        .sortedBy { it.name }
+        .joinToString("|") { "${it.name}:${it.lastModified()}:${it.length()}" }
+
+/**
+ * Grava `sessions_teste/.run_complete` (fim com sucesso no modo teste) com a
+ * resolucao usada na execucao, para validar a promocao com a mesma tela.
+ */
+fun markRunComplete(context: Context, screen: Size) {
     try {
-        File(SessionStore(context, testMode = true).directory(), RUN_COMPLETE_FILE).writeText("")
+        File(SessionStore(context, testMode = true).directory(), RUN_COMPLETE_FILE)
+            .writeText("${screen.width} ${screen.height}")
     } catch (e: IOException) {
         android.util.Log.w(ClickAccessibilityService.TAG, "Falha ao gravar $RUN_COMPLETE_FILE", e)
     }
@@ -49,15 +64,21 @@ class EditorStorage(private val context: Context) {
 
     fun runCompleteExists(): Boolean = File(testDir, RUN_COMPLETE_FILE).isFile
 
+    /** Resolucao gravada pela execucao de teste concluida, ou `null`. */
+    fun runCompleteScreen(): Size? = runCatching {
+        val (w, h) = File(testDir, RUN_COMPLETE_FILE).readText().trim().split(' ').map(String::toInt)
+        Size(w, h)
+    }.getOrNull()
+
     fun invalidateRunComplete() {
         File(testDir, RUN_COMPLETE_FILE).delete()
     }
 
     /** Erros do roteiro de `sessions_teste/` (vazio = OK), sem parar no primeiro. */
-    fun validateTestSessions(): List<String> = SessionValidator.errors(
+    fun validateTestSessions(screen: Size = screenSizeOf(context)): List<String> = SessionValidator.errors(
         source = SessionStore(context, testMode = true),
         templates = TemplateStore(context, VALIDATION_TEMPLATES_TEST_MODE)::sizeOf,
-        screen = screenSizeOf(context)
+        screen = screen
     )
 
     /** Referencias de outras sessoes a [fileName]. */
@@ -82,7 +103,10 @@ class EditorStorage(private val context: Context) {
     fun copyTestToMain(): Int = copyJson(testDir, mainDir)
 
     /** Copia os `.json` de `sessions/` para `sessions_teste/`, sobrescrevendo. */
-    fun copyMainToTest(): Int = copyJson(mainDir, testDir).also { invalidateRunComplete() }
+    fun copyMainToTest(): Int {
+        invalidateRunComplete()
+        return copyJson(mainDir, testDir)
+    }
 
     private fun copyJson(from: File, to: File): Int {
         val files = jsonFiles(from)
@@ -101,7 +125,7 @@ class EditorStorage(private val context: Context) {
             ?: throw IOException("nao foi possivel abrir $uri")
 
     /** Copia [uri] para `sessions_teste/[fileName]`, sobrescrevendo. */
-    fun importSession(uri: Uri, fileName: String) = write(fileName, readUri(uri))
+    fun importSession(uri: Uri, fileName: String) = write(File(fileName).name, readUri(uri))
 
     /**
      * Copia [uri] para `templates/[fileName]`. Arquivos com o mesmo nome de
@@ -110,11 +134,21 @@ class EditorStorage(private val context: Context) {
      */
     fun importTemplate(uri: Uri, fileName: String) {
         val dir = templates.directory()
-        val key = File(fileName).nameWithoutExtension.lowercase()
-        dir.listFiles()?.filter { it.isFile && it.nameWithoutExtension.lowercase() == key }?.forEach { it.delete() }
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            File(dir, fileName).outputStream().use { input.copyTo(it) }
-        } ?: throw IOException("nao foi possivel abrir $uri")
+        val name = File(fileName).name
+        val key = File(name).nameWithoutExtension.lowercase()
+        // Copia primeiro para um temporario: em falha, o template antigo fica intacto.
+        val temp = File(dir, ".$name.tmp")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                temp.outputStream().use { input.copyTo(it) }
+            } ?: throw IOException("nao foi possivel abrir $uri")
+            dir.listFiles()
+                ?.filter { it.isFile && it != temp && it.nameWithoutExtension.lowercase() == key }
+                ?.forEach { it.delete() }
+            if (!temp.renameTo(File(dir, name))) throw IOException("nao foi possivel gravar $name")
+        } finally {
+            temp.delete()
+        }
     }
 
     /** `true` se ja existe um template com o nome de [fileName], qualquer extensao. */

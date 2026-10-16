@@ -30,6 +30,9 @@ class MainActivity : AppCompatActivity() {
     private var pendingStart = false
     private var shownTestMode: Boolean? = null
 
+    /** Voltando do editor, as sessoes ativas podem ter mudado: revalida a carga. */
+    private var editorOpened = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -58,6 +61,7 @@ class MainActivity : AppCompatActivity() {
             log.add("Gravacao do log", if (checked) "ligada" else "desligada")
         }
         binding.openEditorButton.setOnClickListener {
+            editorOpened = true
             startActivity(Intent(this, ScriptEditorActivity::class.java))
         }
         binding.runLimitInput.setText(String.format(Locale.ROOT, "%d", prefs.runLimitMinutes))
@@ -75,8 +79,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // O modo teste e trocado no editor (T1): caminhos e carga refletem o atual.
         val testMode = prefs.testMode
-        if (testMode != shownTestMode) {
+        if (testMode != shownTestMode || editorOpened) {
             shownTestMode = testMode
+            editorOpened = false
             showPaths()
             validateLoad()
         }
